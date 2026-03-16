@@ -44,29 +44,14 @@ function loadLayer(layer) {
  * Extract minimal fields for map display depending on layer type
  */
 function minimalFields(record, layer) {
-  const base = { lat: record.lat, lng: record.lng };
-  switch (layer) {
-    case 'sales':
-      return { ...base, id: record.id, addr: record.addr, pr: record.pr, dt: record.dt };
-    case 'permits':
-      return { ...base, id: record.id, addr: record.addr, type: record.type, dt: record.dt };
-    case 'trades':
-      return { ...base, id: record.id, addr: record.addr, type: record.type, dt: record.dt };
-    case 'blight':
-      return { ...base, id: record.id, addr: record.addr, dt: record.dt };
-    case 'dlba':
-      return { ...base, pid: record.pid, addr: record.addr, st: record.st };
-    case 'demos':
-      return { ...base, addr: record.addr, dt: record.dt };
-    case 'rentals':
-      return { ...base, addr: record.addr, type: record.type, dt: record.dt };
-    case 'crime':
-      return { ...base, iid: record.iid, addr: record.addr, cat: record.cat, dt: record.dt };
-    case 'vacant':
-      return { ...base, addr: record.addr, dt: record.dt };
-    default:
-      return base;
+  // Pass through ALL fields for full popup detail
+  // Only strip internal/geo duplication fields
+  const result = {};
+  for (const key of Object.keys(record)) {
+    if (['_lat', '_lng', 'ObjectId', 'OBJECTID', 'address_id', 'building_id'].includes(key)) continue;
+    result[key] = record[key];
   }
+  return result;
 }
 
 /**

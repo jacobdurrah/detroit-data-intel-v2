@@ -186,7 +186,7 @@
 
       var popupContent = buildPopup(layer, pt);
       marker.bindPopup(popupContent, {
-        maxWidth: 280,
+        maxWidth: 340,
         className: 'dark-popup'
       });
 
@@ -201,34 +201,134 @@
   }
 
   function buildPopup(layer, pt) {
-    var html = '<div style="color:#e0e0e0;font-size:13px;line-height:1.5;">';
+    var html = '<div class="popup-content">';
 
     // Handle cluster points
     if (pt.count) {
-      html += '<strong>' + pt.count + ' records</strong>';
-      html += '</div>';
+      html += '<strong>' + pt.count + ' records</strong></div>';
       return html;
     }
 
     var addr = pt.addr || pt.address || '';
     if (addr) {
-      html += '<strong style="font-size:14px;">' + App.escapeHtml(addr) + '</strong><br>';
+      html += '<div class="popup-address">' + App.escapeHtml(addr) + '</div>';
     }
 
-    html += '<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;margin:4px 0;background:' + (LAYER_COLORS[layer] || '#3b82f6') + '33;color:' + (LAYER_COLORS[layer] || '#3b82f6') + ';">' + layer.charAt(0).toUpperCase() + layer.slice(1) + '</span><br>';
+    html += '<span class="popup-layer-badge" style="background:' + (LAYER_COLORS[layer] || '#3b82f6') + '33;color:' + (LAYER_COLORS[layer] || '#3b82f6') + ';">' + layer.charAt(0).toUpperCase() + layer.slice(1) + '</span>';
 
-    // Handle both compact and full field names
-    var price = pt.pr || pt.sale_price || pt.price;
-    var date = pt.dt || pt.sale_date || pt.date;
-    var typ = pt.type || pt.cat;
-    var status = pt.st || pt.status;
+    // Field display config per layer type
+    var fields = [];
 
-    if (price) html += 'Price: <strong>' + App.formatCurrencyFull(price) + '</strong><br>';
-    if (date) html += 'Date: ' + App.formatDate(date) + '<br>';
-    if (typ) html += 'Type: ' + App.escapeHtml(typ) + '<br>';
-    if (status) html += 'Status: ' + App.escapeHtml(status) + '<br>';
+    if (layer === 'sales') {
+      // Support both abbreviated (slim) and full field names
+      fields = [
+        {k: ['pr','amt_sale_price','sale_price','price'], l: 'Sale Price', fmt: 'currency'},
+        {k: ['dt','sale_date','date'], l: 'Sale Date', fmt: 'date'},
+        {k: ['ge','grantee','buyer'], l: 'Buyer (Grantee)'},
+        {k: ['gr','grantor','seller'], l: 'Seller (Grantor)'},
+        {k: ['si','sale_instrument'], l: 'Deed Type'},
+        {k: ['tos','term_of_sale'], l: 'Terms'},
+        {k: ['pcd','property_class_description'], l: 'Property Class'},
+        {k: ['nb','neighborhood'], l: 'Neighborhood'},
+        {k: ['ecf','ecf_neighborhood'], l: 'ECF Neighborhood'},
+        {k: ['zip','zip_code'], l: 'Zip Code'},
+        {k: ['pid','parcel_id'], l: 'Parcel ID'},
+        {k: ['cd','council_district'], l: 'Council District'},
+        {k: ['lp','liber_page'], l: 'Liber/Page'},
+        {k: ['ppt','pct_property_transferred'], l: '% Transferred'},
+        {k: ['mps','is_multi_parcel_sale'], l: 'Multi-Parcel'},
+      ];
+    } else if (layer === 'permits') {
+      fields = [
+        {k: 'permit_type', l: 'Permit Type'},
+        {k: 'work_description', l: 'Work Description'},
+        {k: 'issued_date', l: 'Issued', fmt: 'date'},
+        {k: 'submitted_date', l: 'Submitted', fmt: 'date'},
+        {k: 'construction_type', l: 'Construction Type'},
+        {k: 'current_use_type', l: 'Current Use'},
+        {k: 'proposed_use_type', l: 'Proposed Use'},
+        {k: 'zoning_designation', l: 'Zoning'},
+        {k: 'use_group', l: 'Use Group'},
+        {k: 'num_stories', l: 'Stories'},
+        {k: 'num_units', l: 'Units'},
+        {k: 'amt_permit_cost', l: 'Permit Cost', fmt: 'currency'},
+        {k: 'amt_estimated_contractor_cost', l: 'Est. Contractor Cost', fmt: 'currency'},
+        {k: 'is_purchased_from_dlba', l: 'DLBA Purchase'},
+        {k: 'is_in_dlba_compliance', l: 'DLBA Compliance'},
+        {k: 'is_vacant', l: 'Vacant'},
+        {k: 'neighborhood', l: 'Neighborhood'},
+        {k: 'parcel_id', l: 'Parcel ID'},
+      ];
+    } else if (layer === 'trades') {
+      fields = [
+        {k: 'permit_type', l: 'Permit Type'},
+        {k: 'work_description', l: 'Work Description'},
+        {k: 'issued_date', l: 'Issued', fmt: 'date'},
+        {k: 'contact_business_name', l: 'Contractor'},
+        {k: 'contact_name', l: 'Contact Name'},
+        {k: 'contact_address', l: 'Contractor Address'},
+        {k: 'owner_name', l: 'Property Owner'},
+        {k: 'neighborhood', l: 'Neighborhood'},
+        {k: 'parcel_id', l: 'Parcel ID'},
+      ];
+    } else if (layer === 'blight') {
+      fields = [
+        {k: 'ordinance_description', l: 'Violation'},
+        {k: 'ticket_issued_date', l: 'Issued', fmt: 'date'},
+        {k: 'disposition', l: 'Disposition'},
+        {k: 'amt_fine', l: 'Fine', fmt: 'currency'},
+        {k: 'amt_judgment', l: 'Judgment', fmt: 'currency'},
+        {k: 'amt_balance_due', l: 'Balance Due', fmt: 'currency'},
+        {k: 'payment_status', l: 'Payment Status'},
+        {k: 'property_owner_name', l: 'Owner'},
+        {k: 'property_owner_address', l: 'Owner Address'},
+        {k: 'hearing_date', l: 'Hearing', fmt: 'date'},
+        {k: 'judgment_date', l: 'Judgment Date', fmt: 'date'},
+        {k: 'agency_name', l: 'Agency'},
+        {k: 'neighborhood', l: 'Neighborhood'},
+      ];
+    } else if (layer === 'demos') {
+      fields = [
+        {k: 'work_description', l: 'Description'},
+        {k: 'issued_date', l: 'Date', fmt: 'date'},
+        {k: 'demolition_contractor', l: 'Contractor'},
+        {k: 'owner_name', l: 'Owner'},
+        {k: 'neighborhood', l: 'Neighborhood'},
+      ];
+    } else if (layer === 'dlba') {
+      fields = [
+        {k: 'inventory_status_socrata', l: 'Status'},
+        {k: 'neighborhood', l: 'Neighborhood'},
+        {k: 'parcel_id', l: 'Parcel ID'},
+      ];
+    } else {
+      // Generic: show all non-geo fields
+      fields = Object.keys(pt)
+        .filter(function(k) { return !['latitude','longitude','lat','lng','_lat','_lng','ObjectId','OBJECTID','address_id'].includes(k); })
+        .map(function(k) { return {k: k, l: k.replace(/_/g, ' ')}; });
+    }
 
-    html += '</div>';
+    html += '<div class="popup-fields">';
+    fields.forEach(function(f) {
+      // Support array of possible key names (abbreviated + full)
+      var keys = Array.isArray(f.k) ? f.k : [f.k];
+      var val = null;
+      for (var i = 0; i < keys.length; i++) {
+        if (pt[keys[i]] !== null && pt[keys[i]] !== undefined && pt[keys[i]] !== '') {
+          val = pt[keys[i]];
+          break;
+        }
+      }
+      if (val === null || val === undefined || val === '') return;
+      
+      var display = val;
+      if (f.fmt === 'currency') display = App.formatCurrencyFull(val);
+      else if (f.fmt === 'date') display = App.formatDate(val);
+      else display = App.escapeHtml(String(val));
+      
+      html += '<div class="popup-field"><span class="popup-label">' + f.l + '</span><span class="popup-value">' + display + '</span></div>';
+    });
+    html += '</div></div>';
     return html;
   }
 
@@ -272,7 +372,7 @@
         });
 
         var popup = buildPopup(layer, pt);
-        marker.bindPopup(popup, { maxWidth: 280, className: 'dark-popup' });
+        marker.bindPopup(popup, { maxWidth: 340, className: 'dark-popup' });
         marker.addTo(tempGroup);
       });
 
