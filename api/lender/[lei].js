@@ -89,7 +89,7 @@ module.exports = (req, res) => {
     const start = (page - 1) * limit;
     const paginatedLoans = filteredLoans.slice(start, start + limit).map(l => ({
       ...l,
-      neighborhood: TRACT_TO_HOOD[l.census_tract] || `Tract ${(l.census_tract || '').slice(-6)}`
+      neighborhood: l.matched_neighborhood || TRACT_TO_HOOD[l.census_tract] || `Tract ${(l.census_tract || '').slice(-6)}`
     }));
 
     res.status(200).json({

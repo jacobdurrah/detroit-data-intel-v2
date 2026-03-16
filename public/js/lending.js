@@ -176,32 +176,74 @@
     if (!loans.length) return '<p class="empty-state">No loans match this filter.</p>';
 
     var html = '<div class="table-scroll"><table class="data-table">';
-    html += '<thead><tr>';
-    html += '<th>Amount</th><th>Rate</th><th>Type</th><th>Purpose</th>';
-    html += '<th>Units</th><th>Occupancy</th><th>LLC</th>';
-    html += '<th>Address</th><th>Buyer</th><th>Seller</th><th>Neighborhood</th>';
-    html += '</tr></thead><tbody>';
+    // On mobile use cards, on desktop use table
+    var isMobile = window.innerWidth < 768;
+    
+    if (isMobile) {
+      loans.forEach(function(l) {
+        var isBiz = l.is_business ? ' 🏢' : '';
+        var addr = l.matched_address || '';
+        var buyer = l.matched_grantee || '';
+        var seller = l.matched_grantor || '';
+        var hood = l.matched_neighborhood || l.neighborhood || '';
+        var date = (l.matched_date || '').split('T')[0] || '';
+        
+        html += '<div class="loan-card' + (l.is_business ? ' loan-card-biz' : '') + '">';
+        html += '<div class="loan-card-header">';
+        html += '<span class="loan-card-amount">' + App.formatCurrency(l.loan_amount) + '</span>';
+        html += '<span class="loan-card-rate">' + (l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--') + '</span>';
+        html += '</div>';
+        if (addr) html += '<div class="loan-card-address">📍 ' + App.escapeHtml(addr) + '</div>';
+        html += '<div class="loan-card-details">';
+        html += '<span>' + App.escapeHtml(l.loan_type || '') + '</span>';
+        html += '<span>' + App.escapeHtml(l.loan_purpose || '') + '</span>';
+        html += '<span>' + App.escapeHtml(l.occupancy || '') + isBiz + '</span>';
+        if (l.total_units && l.total_units !== '1') html += '<span>' + l.total_units + ' units</span>';
+        html += '</div>';
+        if (buyer || seller) {
+          html += '<div class="loan-card-parties">';
+          if (buyer) html += '<div>Buyer: <strong>' + App.escapeHtml(buyer) + '</strong></div>';
+          if (seller) html += '<div>Seller: ' + App.escapeHtml(seller) + '</div>';
+          html += '</div>';
+        }
+        if (date || hood) {
+          html += '<div class="loan-card-meta">';
+          if (date) html += '<span>📅 ' + date + '</span>';
+          if (hood) html += '<span>📍 ' + App.escapeHtml(hood) + '</span>';
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+    } else {
+      html += '<thead><tr>';
+      html += '<th>Amount</th><th>Rate</th><th>Type</th><th>Purpose</th>';
+      html += '<th>Units</th><th>Occupancy</th><th>LLC</th>';
+      html += '<th>Date</th><th>Address</th><th>Buyer</th><th>Seller</th><th>Neighborhood</th>';
+      html += '</tr></thead><tbody>';
 
-    loans.forEach(function(l) {
-      var isBiz = l.is_business ? '✅' : '';
-      var addr = l.matched_address || '';
-      var buyer = l.matched_grantee || '';
-      var seller = l.matched_grantor || '';
-      var hood = l.matched_neighborhood || l.neighborhood || '';
-      html += '<tr' + (l.is_business ? ' class="row-highlight"' : '') + '>';
-      html += '<td>' + App.formatCurrency(l.loan_amount) + '</td>';
-      html += '<td>' + (l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--') + '</td>';
-      html += '<td>' + App.escapeHtml(l.loan_type || '') + '</td>';
-      html += '<td>' + App.escapeHtml(l.loan_purpose || '') + '</td>';
-      html += '<td>' + App.escapeHtml(l.total_units || '1') + '</td>';
-      html += '<td>' + App.escapeHtml(l.occupancy || '') + '</td>';
-      html += '<td>' + isBiz + '</td>';
-      html += '<td class="cell-address">' + App.escapeHtml(addr) + '</td>';
-      html += '<td>' + App.escapeHtml(buyer) + '</td>';
-      html += '<td>' + App.escapeHtml(seller) + '</td>';
-      html += '<td>' + App.escapeHtml(hood) + '</td>';
-      html += '</tr>';
-    });
+      loans.forEach(function(l) {
+        var isBiz = l.is_business ? '✅' : '';
+        var addr = l.matched_address || '';
+        var buyer = l.matched_grantee || '';
+        var seller = l.matched_grantor || '';
+        var hood = l.matched_neighborhood || l.neighborhood || '';
+        var date = (l.matched_date || '').split('T')[0] || '';
+        html += '<tr' + (l.is_business ? ' class="row-highlight"' : '') + '>';
+        html += '<td>' + App.formatCurrency(l.loan_amount) + '</td>';
+        html += '<td>' + (l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--') + '</td>';
+        html += '<td>' + App.escapeHtml(l.loan_type || '') + '</td>';
+        html += '<td>' + App.escapeHtml(l.loan_purpose || '') + '</td>';
+        html += '<td>' + App.escapeHtml(l.total_units || '1') + '</td>';
+        html += '<td>' + App.escapeHtml(l.occupancy || '') + '</td>';
+        html += '<td>' + isBiz + '</td>';
+        html += '<td>' + date + '</td>';
+        html += '<td class="cell-address">' + App.escapeHtml(addr) + '</td>';
+        html += '<td>' + App.escapeHtml(buyer) + '</td>';
+        html += '<td>' + App.escapeHtml(seller) + '</td>';
+        html += '<td>' + App.escapeHtml(hood) + '</td>';
+        html += '</tr>';
+      });
+    }
 
     html += '</tbody></table></div>';
     return html;
