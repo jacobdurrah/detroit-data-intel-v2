@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env.local
+.env*.local
+
+# Vercel
+.vercel
+
+# Data sources (symlinked from v1)
+data-source/
+
+# Test results
+test-results/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Build output
+.output/
+dist/

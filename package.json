@@ -1,0 +1,21 @@
+{
+  "name": "detroit-data-intel-v2",
+  "version": "1.0.0",
+  "description": "Detroit Data Intelligence Platform V2",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "vercel build",
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.1"
+  }
+}
