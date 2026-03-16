@@ -216,6 +216,8 @@
         break;
       case 'pipeline':
         if (window.PipelineModule) window.PipelineModule.init();
+        break;
+      case 'sources':
         if (window.SourcesModule) window.SourcesModule.init();
         break;
     }
