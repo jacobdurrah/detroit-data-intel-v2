@@ -108,7 +108,7 @@
   function renderCards(container, investors) {
     var html = '';
     investors.forEach(function (inv) {
-      var tierClass = (inv.tier || 'small').toLowerCase();
+      var tierClass = (inv.investment_tier || inv.tier || 'small').toLowerCase();
       html +=
         '<div class="card" data-investor="' + App.escapeHtml(inv.name || inv.investor_name || '') + '">' +
           '<div class="card-header">' +
@@ -121,9 +121,9 @@
             '<div class="card-metric"><span class="metric-label">Avg Price</span><span class="metric-value">' + App.formatCurrency(inv.avg_price) + '</span></div>' +
             '<div class="card-metric"><span class="metric-label">Top Area</span><span class="metric-value truncate">' + App.escapeHtml(inv.top_neighborhood || '--') + '</span></div>' +
           '</div>' +
-          (inv.first_date || inv.last_date ?
+          (inv.first_purchase || inv.first_date || inv.last_purchase || inv.last_date ?
             '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">' +
-              App.formatDate(inv.first_date) + ' \u2014 ' + App.formatDate(inv.last_date) +
+              App.formatDate(inv.first_purchase || inv.first_date) + ' \u2014 ' + App.formatDate(inv.last_purchase || inv.last_date) +
             '</div>' : '') +
         '</div>';
     });
@@ -139,7 +139,7 @@
         '</tr></thead><tbody>';
 
     investors.forEach(function (inv) {
-      var tierClass = (inv.tier || 'small').toLowerCase();
+      var tierClass = (inv.investment_tier || inv.tier || 'small').toLowerCase();
       html +=
         '<tr data-investor="' + App.escapeHtml(inv.name || inv.investor_name || '') + '" style="cursor:pointer;">' +
           '<td><strong>' + App.escapeHtml(inv.name || inv.investor_name || 'Unknown') + '</strong></td>' +
@@ -148,8 +148,8 @@
           '<td>' + App.formatCurrency(inv.total_spend) + '</td>' +
           '<td>' + App.formatCurrency(inv.avg_price) + '</td>' +
           '<td>' + App.escapeHtml(inv.top_neighborhood || '--') + '</td>' +
-          '<td>' + App.formatDate(inv.first_date) + '</td>' +
-          '<td>' + App.formatDate(inv.last_date) + '</td>' +
+          '<td>' + App.formatDate(inv.first_purchase || inv.first_date) + '</td>' +
+          '<td>' + App.formatDate(inv.last_purchase || inv.last_date) + '</td>' +
         '</tr>';
     });
 
@@ -202,7 +202,7 @@
           '<div class="card-metric"><span class="metric-label">Total Purchases</span><span class="metric-value">' + App.formatNumber(inv.total_purchases) + '</span></div>' +
           '<div class="card-metric"><span class="metric-label">Total Spend</span><span class="metric-value">' + App.formatCurrency(inv.total_spend) + '</span></div>' +
           '<div class="card-metric"><span class="metric-label">Avg Price</span><span class="metric-value">' + App.formatCurrency(inv.avg_price) + '</span></div>' +
-          '<div class="card-metric"><span class="metric-label">Tier</span><span class="metric-value"><span class="tier-badge ' + ((inv.tier || 'small').toLowerCase()) + '">' + (inv.tier || 'small') + '</span></span></div>' +
+          '<div class="card-metric"><span class="metric-label">Tier</span><span class="metric-value"><span class="tier-badge ' + ((inv.investment_tier || inv.tier || 'small').toLowerCase()) + '">' + (inv.investment_tier || inv.tier || 'small') + '</span></span></div>' +
         '</div>';
 
       if (purchases.length) {
