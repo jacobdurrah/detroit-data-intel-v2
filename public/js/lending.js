@@ -178,11 +178,16 @@
     var html = '<div class="table-scroll"><table class="data-table">';
     html += '<thead><tr>';
     html += '<th>Amount</th><th>Rate</th><th>Type</th><th>Purpose</th>';
-    html += '<th>Units</th><th>Occupancy</th><th>Biz/LLC</th><th>Neighborhood</th>';
+    html += '<th>Units</th><th>Occupancy</th><th>LLC</th>';
+    html += '<th>Address</th><th>Buyer</th><th>Seller</th><th>Neighborhood</th>';
     html += '</tr></thead><tbody>';
 
     loans.forEach(function(l) {
       var isBiz = l.is_business ? '✅' : '';
+      var addr = l.matched_address || '';
+      var buyer = l.matched_grantee || '';
+      var seller = l.matched_grantor || '';
+      var hood = l.matched_neighborhood || l.neighborhood || '';
       html += '<tr' + (l.is_business ? ' class="row-highlight"' : '') + '>';
       html += '<td>' + App.formatCurrency(l.loan_amount) + '</td>';
       html += '<td>' + (l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--') + '</td>';
@@ -191,7 +196,10 @@
       html += '<td>' + App.escapeHtml(l.total_units || '1') + '</td>';
       html += '<td>' + App.escapeHtml(l.occupancy || '') + '</td>';
       html += '<td>' + isBiz + '</td>';
-      html += '<td>' + App.escapeHtml(l.neighborhood || '') + '</td>';
+      html += '<td class="cell-address">' + App.escapeHtml(addr) + '</td>';
+      html += '<td>' + App.escapeHtml(buyer) + '</td>';
+      html += '<td>' + App.escapeHtml(seller) + '</td>';
+      html += '<td>' + App.escapeHtml(hood) + '</td>';
       html += '</tr>';
     });
 

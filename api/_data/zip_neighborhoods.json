@@ -1,0 +1,514 @@
+{
+  "48226": {
+    "primary": "Downtown",
+    "all": [
+      {
+        "name": "Downtown",
+        "count": 141
+      },
+      {
+        "name": "Corktown",
+        "count": 25
+      },
+      {
+        "name": "Greektown",
+        "count": 11
+      }
+    ]
+  },
+  "48209": {
+    "primary": "Springwells",
+    "all": [
+      {
+        "name": "Springwells",
+        "count": 434
+      },
+      {
+        "name": "Central Southwest",
+        "count": 420
+      },
+      {
+        "name": "Delray",
+        "count": 357
+      }
+    ]
+  },
+  "48217": {
+    "primary": "Oakwood Heights",
+    "all": [
+      {
+        "name": "Oakwood Heights",
+        "count": 515
+      },
+      {
+        "name": "Boynton",
+        "count": 184
+      }
+    ]
+  },
+  "48228": {
+    "primary": "Warrendale",
+    "all": [
+      {
+        "name": "Warrendale",
+        "count": 534
+      },
+      {
+        "name": "Franklin Park",
+        "count": 227
+      },
+      {
+        "name": "Aviation Sub",
+        "count": 223
+      }
+    ]
+  },
+  "48224": {
+    "primary": "Morningside",
+    "all": [
+      {
+        "name": "Morningside",
+        "count": 2203
+      },
+      {
+        "name": "Cornerstone Village",
+        "count": 1483
+      },
+      {
+        "name": "East English Village",
+        "count": 1011
+      }
+    ]
+  },
+  "48201": {
+    "primary": "Midtown",
+    "all": [
+      {
+        "name": "Midtown",
+        "count": 208
+      },
+      {
+        "name": "Brush Park",
+        "count": 130
+      },
+      {
+        "name": "North Corktown",
+        "count": 29
+      }
+    ]
+  },
+  "48214": {
+    "primary": "East Village",
+    "all": [
+      {
+        "name": "East Village",
+        "count": 1272
+      },
+      {
+        "name": "Islandview",
+        "count": 201
+      },
+      {
+        "name": "Marina District",
+        "count": 179
+      }
+    ]
+  },
+  "48202": {
+    "primary": "North End",
+    "all": [
+      {
+        "name": "North End",
+        "count": 226
+      },
+      {
+        "name": "Piety Hill",
+        "count": 138
+      },
+      {
+        "name": "Boston Edison",
+        "count": 123
+      }
+    ]
+  },
+  "48203": {
+    "primary": "Nolan",
+    "all": [
+      {
+        "name": "Nolan",
+        "count": 834
+      },
+      {
+        "name": "Grixdale Farms",
+        "count": 369
+      },
+      {
+        "name": "Hawthorne Park",
+        "count": 187
+      }
+    ]
+  },
+  "48221": {
+    "primary": "Bagley",
+    "all": [
+      {
+        "name": "Bagley",
+        "count": 2103
+      },
+      {
+        "name": "Fitzgerald/Marygrove",
+        "count": 749
+      },
+      {
+        "name": "University District",
+        "count": 502
+      }
+    ]
+  },
+  "48207": {
+    "primary": "Islandview",
+    "all": [
+      {
+        "name": "Islandview",
+        "count": 259
+      },
+      {
+        "name": "McDougall-Hunt",
+        "count": 242
+      },
+      {
+        "name": "Rivertown",
+        "count": 192
+      }
+    ]
+  },
+  "48211": {
+    "primary": "Airport Sub",
+    "all": [
+      {
+        "name": "Airport Sub",
+        "count": 245
+      },
+      {
+        "name": "Poletown East",
+        "count": 196
+      },
+      {
+        "name": "North End",
+        "count": 102
+      }
+    ]
+  },
+  "48216": {
+    "primary": "North Corktown",
+    "all": [
+      {
+        "name": "North Corktown",
+        "count": 142
+      },
+      {
+        "name": "Corktown",
+        "count": 101
+      },
+      {
+        "name": "Hubbard Richard",
+        "count": 55
+      }
+    ]
+  },
+  "48208": {
+    "primary": "Woodbridge",
+    "all": [
+      {
+        "name": "Woodbridge",
+        "count": 193
+      },
+      {
+        "name": "Elijah McCoy",
+        "count": 142
+      },
+      {
+        "name": "Chadsey Condon",
+        "count": 86
+      }
+    ]
+  },
+  "48206": {
+    "primary": "Boston Edison",
+    "all": [
+      {
+        "name": "Boston Edison",
+        "count": 329
+      },
+      {
+        "name": "Dexter-Linwood",
+        "count": 198
+      },
+      {
+        "name": "Virginia Park Community",
+        "count": 140
+      }
+    ]
+  },
+  "48238": {
+    "primary": "Oakman Blvd Community",
+    "all": [
+      {
+        "name": "Oakman Blvd Community",
+        "count": 256
+      },
+      {
+        "name": "Fitzgerald/Marygrove",
+        "count": 137
+      },
+      {
+        "name": "Pilgrim Village",
+        "count": 132
+      }
+    ]
+  },
+  "48236": {
+    "primary": "Cornerstone Village",
+    "all": [
+      {
+        "name": "Cornerstone Village",
+        "count": 251
+      },
+      {
+        "name": "Corktown",
+        "count": 1
+      }
+    ]
+  },
+  "48212": {
+    "primary": "Buffalo Charles",
+    "all": [
+      {
+        "name": "Buffalo Charles",
+        "count": 790
+      },
+      {
+        "name": "Campau/Banglatown",
+        "count": 623
+      },
+      {
+        "name": "Davison",
+        "count": 323
+      }
+    ]
+  },
+  "48234": {
+    "primary": "Farwell",
+    "all": [
+      {
+        "name": "Farwell",
+        "count": 1224
+      },
+      {
+        "name": "Nortown",
+        "count": 557
+      },
+      {
+        "name": "Pershing",
+        "count": 472
+      }
+    ]
+  },
+  "48204": {
+    "primary": "Aviation Sub",
+    "all": [
+      {
+        "name": "Aviation Sub",
+        "count": 250
+      },
+      {
+        "name": "Midwest",
+        "count": 186
+      },
+      {
+        "name": "Barton-McFarland",
+        "count": 165
+      }
+    ]
+  },
+  "48210": {
+    "primary": "Claytown",
+    "all": [
+      {
+        "name": "Claytown",
+        "count": 536
+      },
+      {
+        "name": "Midwest",
+        "count": 186
+      },
+      {
+        "name": "Chadsey Condon",
+        "count": 152
+      }
+    ]
+  },
+  "48213": {
+    "primary": "Airport Sub",
+    "all": [
+      {
+        "name": "Airport Sub",
+        "count": 447
+      },
+      {
+        "name": "Outer Drive-Hayes",
+        "count": 118
+      },
+      {
+        "name": "Wade",
+        "count": 80
+      }
+    ]
+  },
+  "48215": {
+    "primary": "Jefferson Chalmers",
+    "all": [
+      {
+        "name": "Jefferson Chalmers",
+        "count": 266
+      },
+      {
+        "name": "Riverbend",
+        "count": 234
+      },
+      {
+        "name": "Fox Creek",
+        "count": 100
+      }
+    ]
+  },
+  "48205": {
+    "primary": "Mapleridge",
+    "all": [
+      {
+        "name": "Mapleridge",
+        "count": 397
+      },
+      {
+        "name": "Regent Park",
+        "count": 194
+      },
+      {
+        "name": "Franklin",
+        "count": 130
+      }
+    ]
+  },
+  "48227": {
+    "primary": "Crary/St Marys",
+    "all": [
+      {
+        "name": "Crary/St Marys",
+        "count": 732
+      },
+      {
+        "name": "Greenfield-Grand River",
+        "count": 496
+      },
+      {
+        "name": "Grandmont",
+        "count": 374
+      }
+    ]
+  },
+  "48239": {
+    "primary": "Far West Detroit",
+    "all": [
+      {
+        "name": "Far West Detroit",
+        "count": 705
+      },
+      {
+        "name": "West Outer Drive",
+        "count": 336
+      },
+      {
+        "name": "Rouge Park",
+        "count": 18
+      }
+    ]
+  },
+  "48223": {
+    "primary": "Rosedale Park",
+    "all": [
+      {
+        "name": "Rosedale Park",
+        "count": 692
+      },
+      {
+        "name": "Brightmoor",
+        "count": 690
+      },
+      {
+        "name": "Grandmont #1",
+        "count": 312
+      }
+    ]
+  },
+  "48219": {
+    "primary": "Evergreen Lahser 7/8",
+    "all": [
+      {
+        "name": "Evergreen Lahser 7/8",
+        "count": 1106
+      },
+      {
+        "name": "Evergreen-Outer Drive",
+        "count": 664
+      },
+      {
+        "name": "North Rosedale Park",
+        "count": 474
+      }
+    ]
+  },
+  "48235": {
+    "primary": "Winship",
+    "all": [
+      {
+        "name": "Winship",
+        "count": 765
+      },
+      {
+        "name": "Schaefer 7/8 Lodge",
+        "count": 682
+      },
+      {
+        "name": "Schulze",
+        "count": 654
+      }
+    ]
+  },
+  "48243": {
+    "primary": "New Center Commons",
+    "all": [
+      {
+        "name": "New Center Commons",
+        "count": 2
+      }
+    ]
+  },
+  "48230": {
+    "primary": "Martin Park",
+    "all": [
+      {
+        "name": "Martin Park",
+        "count": 2
+      }
+    ]
+  },
+  "48225": {
+    "primary": "Moross-Morang",
+    "all": [
+      {
+        "name": "Moross-Morang",
+        "count": 1
+      }
+    ]
+  }
+}
