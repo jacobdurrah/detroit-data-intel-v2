@@ -1368,3 +1368,33 @@ a {
 .popup-field { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid #2a2a3e; }
 .popup-label { color: #888; font-size: 11px; min-width: 90px; flex-shrink: 0; }
 .popup-value { color: #e0e0e0; font-size: 12px; text-align: right; word-break: break-word; }
+
+/* View Toggle */
+.view-toggle { display: flex; gap: 4px; margin: 8px 12px; background: #1a1a2e; border-radius: 10px; padding: 3px; }
+.toggle-btn { flex: 1; padding: 8px 12px; background: transparent; border: none; color: #888; font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+.toggle-btn.active { background: #3b82f6; color: #fff; }
+
+/* Stats Bar */
+.stats-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+.stat-pill { background: #2a2a3e; padding: 4px 10px; border-radius: 8px; font-size: 12px; color: #e0e0e0; white-space: nowrap; }
+
+/* Search Input */
+.filter-input { background: #1a1a2e; border: 1px solid #333; color: #e0e0e0; padding: 8px 12px; border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box; margin-bottom: 6px; }
+.filter-input:focus { border-color: #3b82f6; outline: none; }
+
+/* Loan cards (full view) */
+.loan-card-full { margin-bottom: 8px; }
+.loan-card-full.loan-biz { border-left: 3px solid #10b981; }
+.loan-lender { font-size: 12px; color: #3b82f6; padding: 2px 12px; }
+.loan-addr { font-size: 13px; color: #e0e0e0; padding: 2px 12px; }
+.loan-party { font-size: 12px; color: #ccc; padding: 1px 12px; }
+.loan-meta { display: flex; gap: 12px; font-size: 11px; color: #888; padding: 4px 12px 8px; }
+
+/* Table improvements */
+.cell-lender { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.cell-address { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-highlight { background: rgba(16, 185, 129, 0.08) !important; }
+.row-highlight td { border-bottom-color: rgba(16, 185, 129, 0.2); }
+
+/* Pagination */
+.pagination { display: flex; justify-content: center; gap: 4px; padding: 12px; flex-wrap: wrap; }

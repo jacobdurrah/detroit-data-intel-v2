@@ -146,7 +146,14 @@
       <!-- Lending Tab -->
       <div id="tab-lending" class="tab-content">
         <div class="tab-panel">
-          <div class="filter-bar">
+          <!-- View toggle: Lenders vs All Loans -->
+          <div class="view-toggle">
+            <button class="toggle-btn active" id="lending-view-lenders" onclick="LendingModule.switchView('lenders')">🏦 Lenders</button>
+            <button class="toggle-btn" id="lending-view-loans" onclick="LendingModule.switchView('loans')">📋 All Loans</button>
+          </div>
+
+          <!-- Lenders view filters -->
+          <div id="lending-lender-filters" class="filter-bar">
             <div class="filter-checks">
               <label class="filter-check-label"><input type="checkbox" id="lending-sub60k"> Sub-$60K</label>
               <label class="filter-check-label"><input type="checkbox" id="lending-investment"> Investment</label>
@@ -160,6 +167,28 @@
               <option value="name">Name A-Z</option>
             </select>
           </div>
+
+          <!-- All Loans view filters -->
+          <div id="lending-loan-filters" class="filter-bar" style="display:none;">
+            <input type="text" id="loan-search" class="filter-input" placeholder="Search address, buyer, lender, neighborhood...">
+            <div class="filter-checks">
+              <label class="filter-check-label"><input type="checkbox" id="loan-filter-llc"> 🏢 LLC Only</label>
+              <label class="filter-check-label"><input type="checkbox" id="loan-filter-sub60k"> Sub-$60K</label>
+              <label class="filter-check-label"><input type="checkbox" id="loan-filter-investment"> Investment</label>
+            </div>
+            <select id="loan-sort" class="filter-select">
+              <option value="date_desc">Newest First</option>
+              <option value="date_asc">Oldest First</option>
+              <option value="amount_desc">Highest Amount</option>
+              <option value="amount_asc">Lowest Amount</option>
+              <option value="rate_asc">Lowest Rate</option>
+              <option value="rate_desc">Highest Rate</option>
+            </select>
+          </div>
+
+          <!-- Stats bar for all loans view -->
+          <div id="lending-loan-stats" class="stats-bar" style="display:none;"></div>
+
           <div id="lending-list" class="card-list">
             <div class="loading-state">
               <div class="skeleton-card"></div>
@@ -167,6 +196,7 @@
               <div class="skeleton-card"></div>
             </div>
           </div>
+          <div id="lending-pagination" class="pagination"></div>
         </div>
       </div>
 
