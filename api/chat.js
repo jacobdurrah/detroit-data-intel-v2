@@ -166,7 +166,7 @@ function executeQuery(plan) {
       if (plan.filters?.is_business) lenders = lenders.filter(l => (l.llc_sub_60k_loans || 0) > 0 || (l.business_loans || 0) > 0);
       if (plan.filters?.investment) lenders = lenders.filter(l => (l.investment_loans || 0) > 0);
       if (plan.filters?.multifamily) lenders = lenders.filter(l => l.does_multifamily);
-      if (plan.filters?.loan_type) lenders = lenders.filter(l => l.loan_types && l.loan_types[plan.filters.loan_type] > 0);
+      if (plan.filters?.loan_type) lenders = lenders.filter(l => l.lts && l.lts[plan.filters.loan_type] > 0);
       
       if (plan.filters?.sort === 'rate_asc') {
         lenders = lenders.filter(l => l.avg_rate > 0).sort((a, b) => a.avg_rate - b.avg_rate);
@@ -321,14 +321,14 @@ function executeQuery(plan) {
       let loans = [...data.loans];
       const terms = (plan.search_terms || []).map(t => t.toLowerCase());
       
-      if (plan.filters?.is_business) loans = loans.filter(l => l.is_business);
-      if (plan.filters?.sub60k) loans = loans.filter(l => l.loan_amount > 0 && l.loan_amount <= 60000);
+      if (plan.filters?.is_business) loans = loans.filter(l => l.biz);
+      if (plan.filters?.sub60k) loans = loans.filter(l => l.amt > 0 && l.amt <= 60000);
       
       if (terms.length > 0) {
         loans = loans.filter(l => terms.some(t =>
-          (l.matched_address || '').toLowerCase().includes(t) ||
-          (l.matched_grantee || '').toLowerCase().includes(t) ||
-          (l.matched_neighborhood || '').toLowerCase().includes(t)
+          (l.addr || '').toLowerCase().includes(t) ||
+          (l.buyer || '').toLowerCase().includes(t) ||
+          (l.nb || '').toLowerCase().includes(t)
         ));
       }
       
@@ -336,7 +336,7 @@ function executeQuery(plan) {
       const top = loans.slice(0, plan.limit || 20);
       
       results.answer = `Found ${loans.length} loans:\n\n` +
-        top.slice(0, 15).map(l => `$${l.loan_amount.toLocaleString()} | ${l.loan_type} | ${l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--'} | ${l.matched_address || 'N/A'} | ${l.is_business ? '🏢 LLC' : ''}`).join('\n');
+        top.slice(0, 15).map(l => `$${l.amt.toLocaleString()} | ${l.lt} | ${l.rate ? l.rate.toFixed(2) + '%' : '--'} | ${l.addr || 'N/A'} | ${l.biz ? '🏢 LLC' : ''}`).join('\n');
       results.items = top;
       break;
     }

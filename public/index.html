@@ -176,9 +176,18 @@
               <label class="filter-check-label"><input type="checkbox" id="loan-filter-sub60k"> Sub-$60K</label>
               <label class="filter-check-label"><input type="checkbox" id="loan-filter-investment"> Investment</label>
             </div>
+            <select id="loan-year-filter" class="filter-select" style="max-width:100px;">
+              <option value="">All Years</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+              <option value="2021">2021</option>
+              <option value="2020">2020</option>
+              <option value="2019">2019</option>
+              <option value="2018">2018</option>
+            </select>
             <select id="loan-sort" class="filter-select">
-              <option value="date_desc">Newest First</option>
-              <option value="date_asc">Oldest First</option>
+              <option value="year_desc">Newest Year</option>
+              <option value="year_asc">Oldest Year</option>
               <option value="amount_desc">Highest Amount</option>
               <option value="amount_asc">Lowest Amount</option>
               <option value="rate_asc">Lowest Rate</option>

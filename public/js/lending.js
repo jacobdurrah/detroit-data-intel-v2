@@ -33,6 +33,8 @@
     });
     var loanSort = document.getElementById('loan-sort');
     if (loanSort) loanSort.addEventListener('change', function() { loansPage = 1; loadAllLoans(); });
+    var yearFilter = document.getElementById('loan-year-filter');
+    if (yearFilter) yearFilter.addEventListener('change', function() { loansPage = 1; loadAllLoans(); });
     
     var searchInput = document.getElementById('loan-search');
     if (searchInput) {
@@ -142,7 +144,8 @@
       llc: (document.getElementById('loan-filter-llc') || {}).checked ? 'true' : '',
       sub60k: (document.getElementById('loan-filter-sub60k') || {}).checked ? 'true' : '',
       investment: (document.getElementById('loan-filter-investment') || {}).checked ? 'true' : '',
-      sort: (document.getElementById('loan-sort') || {}).value || 'date_desc',
+      sort: (document.getElementById('loan-sort') || {}).value || 'year_desc',
+      year: (document.getElementById('loan-year-filter') || {}).value || '',
       q: (document.getElementById('loan-search') || {}).value || '',
       page: loansPage,
       limit: 50
@@ -165,6 +168,11 @@
 
       // Render stats bar
       if (statsEl) {
+        var yearInfo = '';
+        if (stats.by_year) {
+          var yrs = Object.keys(stats.by_year).sort().reverse();
+          yearInfo = yrs.map(function(y) { return y + ': ' + App.formatNumber(stats.by_year[y]); }).join(' · ');
+        }
         statsEl.innerHTML =
           '<div class="stat-pill"><strong>' + App.formatNumber(stats.total_loans || 0) + '</strong> loans</div>' +
           '<div class="stat-pill">$' + App.formatNumber(Math.round((stats.total_volume || 0) / 1000000)) + 'M volume</div>' +
@@ -172,7 +180,7 @@
           '<div class="stat-pill">Avg $' + App.formatNumber(Math.round(stats.avg_amount || 0)) + '</div>' +
           '<div class="stat-pill">🏢 ' + App.formatNumber(stats.llc_count || 0) + ' LLC</div>' +
           '<div class="stat-pill">' + App.formatNumber(stats.sub60k_count || 0) + ' sub-$60K</div>' +
-          '<div class="stat-pill">📍 ' + App.formatNumber(stats.with_address || 0) + ' w/ address</div>';
+          (yearInfo ? '<div class="stat-pill stat-pill-years">' + yearInfo + '</div>' : '');
       }
 
       if (!loans.length) {
@@ -211,7 +219,7 @@
         html += '<div class="card loan-card-full' + (isBiz ? ' loan-biz' : '') + '">';
         html += '<div class="card-header">';
         html += '<span class="card-title">' + App.formatCurrency(l.loan_amount) + (isBiz ? ' 🏢' : '') + '</span>';
-        html += '<span class="card-badge">' + (l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--') + '</span>';
+        html += '<span class="card-badge">' + (l.year || '') + ' · ' + (l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--') + '</span>';
         html += '</div>';
         html += '<div class="loan-lender">🏦 ' + App.escapeHtml(lender) + '</div>';
         if (addr) html += '<div class="loan-addr">📍 ' + App.escapeHtml(addr) + '</div>';
@@ -233,9 +241,9 @@
       });
     } else {
       html += '<div class="table-scroll"><table class="data-table"><thead><tr>';
-      html += '<th>Amount</th><th>Rate</th><th>Lender</th><th>Type</th><th>Purpose</th>';
-      html += '<th>Units</th><th>Occupancy</th><th>LLC</th>';
-      html += '<th>Date</th><th>Address</th><th>Buyer</th><th>Seller</th><th>Neighborhood</th>';
+      html += '<th>Year</th><th>Amount</th><th>Rate</th><th>Lender</th><th>Type</th><th>Purpose</th>';
+      html += '<th>Occupancy</th><th>LLC</th>';
+      html += '<th>Address</th><th>Buyer</th><th>Seller</th><th>Neighborhood</th>';
       html += '</tr></thead><tbody>';
 
       loans.forEach(function(l) {
@@ -244,19 +252,17 @@
         var buyer = l.matched_grantee || '';
         var seller = l.matched_grantor || '';
         var hood = l.matched_neighborhood || '';
-        var date = (l.matched_date || '').split('T')[0] || '';
         var lender = l.lender_name || l.lei || '';
         
         html += '<tr' + (l.is_business ? ' class="row-highlight"' : '') + '>';
-        html += '<td><strong>' + App.formatCurrency(l.loan_amount) + '</strong></td>';
+        html += '<td><strong>' + (l.year || '') + '</strong></td>';
+        html += '<td>' + App.formatCurrency(l.loan_amount) + '</td>';
         html += '<td>' + (l.interest_rate ? l.interest_rate.toFixed(2) + '%' : '--') + '</td>';
         html += '<td class="cell-lender">' + App.escapeHtml(lender) + '</td>';
         html += '<td>' + App.escapeHtml(l.loan_type || '') + '</td>';
         html += '<td>' + App.escapeHtml(l.loan_purpose || '') + '</td>';
-        html += '<td>' + App.escapeHtml(l.total_units || '1') + '</td>';
         html += '<td>' + App.escapeHtml(l.occupancy || '') + '</td>';
         html += '<td>' + isBiz + '</td>';
-        html += '<td>' + date + '</td>';
         html += '<td class="cell-address">' + App.escapeHtml(addr) + '</td>';
         html += '<td>' + App.escapeHtml(buyer) + '</td>';
         html += '<td>' + App.escapeHtml(seller) + '</td>';
