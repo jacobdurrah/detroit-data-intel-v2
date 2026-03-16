@@ -39,6 +39,17 @@ module.exports = (req, res) => {
       filtered = filtered.filter(l => l.does_multifamily === true);
     }
 
+    // Filter by LLC/business sub-60K
+    if (req.query.llc_sub60k === 'true') {
+      filtered = filtered.filter(l => (l.llc_sub_60k_loans || 0) > 0);
+      filtered.sort((a, b) => (b.llc_sub_60k_loans || 0) - (a.llc_sub_60k_loans || 0));
+    }
+
+    // Filter by business/LLC lending
+    if (req.query.business === 'true') {
+      filtered = filtered.filter(l => (l.business_loans || 0) > 0);
+    }
+
     // Filter by loan type (e.g., FHA, Conventional, VA)
     if (loan_type) {
       filtered = filtered.filter(l => l.loan_types && l.loan_types[loan_type] > 0);

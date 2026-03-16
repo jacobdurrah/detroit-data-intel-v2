@@ -1143,3 +1143,32 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Lender Detail */
+.lender-detail h2 { margin: 0 0 12px; color: #3b82f6; font-size: 20px; }
+.lender-detail h3 { margin: 16px 0 8px; font-size: 15px; color: #e0e0e0; }
+.btn-back { background: none; border: 1px solid #3b82f6; color: #3b82f6; padding: 6px 14px; border-radius: 6px; cursor: pointer; margin-bottom: 12px; font-size: 13px; }
+.btn-back:hover { background: #3b82f6; color: white; }
+.detail-header { background: #1a1a2e; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+.detail-hoods { display: flex; flex-direction: column; gap: 4px; }
+.hood-row { display: flex; justify-content: space-between; padding: 6px 10px; background: #1a1a2e; border-radius: 6px; font-size: 13px; }
+.hood-name { flex: 2; color: #e0e0e0; }
+.hood-count { flex: 1; text-align: right; color: #3b82f6; }
+.hood-amount { flex: 1; text-align: right; color: #10b981; }
+.hood-rate { flex: 1; text-align: right; color: #f59e0b; }
+.loan-filters { margin: 16px 0 8px; }
+.filter-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.pill { background: #2a2a3e; border: 1px solid #333; color: #e0e0e0; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 12px; }
+.pill.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+.pill:hover { border-color: #3b82f6; }
+.table-scroll { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.data-table th { background: #1a1a2e; padding: 8px; text-align: left; color: #888; border-bottom: 1px solid #333; position: sticky; top: 0; }
+.data-table td { padding: 6px 8px; border-bottom: 1px solid #1a1a2e; }
+.data-table tr:hover td { background: rgba(59,130,246,0.1); }
+.row-highlight { background: rgba(16,185,129,0.08); }
+.row-highlight td { border-left: 2px solid #10b981; }
+.highlight-green { color: #10b981 !important; font-weight: 700; }
+.card-clickable { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.card-clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,0.2); }
+.card-footer { font-size: 11px; color: #3b82f6; margin-top: 8px; text-align: right; }
