@@ -231,6 +231,15 @@
           <div id="pipeline-pagination" class="pagination"></div>
         </div>
       </div>
+
+      <!-- Sources Tab -->
+      <div id="tab-sources" class="tab-content">
+        <div class="tab-panel">
+          <div id="sources-content" class="sources-page">
+            <div class="loading-state"><div class="skeleton-card"></div></div>
+          </div>
+        </div>
+      </div>
     </main>
 
     <nav id="tab-bar">
@@ -278,6 +287,14 @@
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
         </svg>
         <span>Pipeline</span>
+      </button>
+      <button class="tab-btn" data-tab="sources" aria-label="Sources">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span>Sources</span>
       </button>
     </nav>
 
@@ -329,6 +346,7 @@
   <script src="/js/lending.js"></script>
   <script src="/js/pipeline.js"></script>
   <script src="/js/chat.js"></script>
+  <script src="/js/sources.js"></script>
   <script src="/js/feedback.js"></script>
 </body>
 </html>
