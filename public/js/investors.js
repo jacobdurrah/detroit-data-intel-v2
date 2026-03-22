@@ -12,6 +12,8 @@
   var currentView = 'list';
   var detailPage = 1;
   var detailFilter = '';
+  var cachedDetail = null;
+  var investorDetailMap = null;
 
   // Sale field labels for key-value display
   var SALE_FIELDS = {
@@ -37,8 +39,11 @@
 
   function bindEvents() {
     var searchEl = document.getElementById('investor-search');
-    var tierEl = document.getElementById('investor-tier');
     var sortEl = document.getElementById('investor-sort');
+    var dateFromEl = document.getElementById('investor-date-from');
+    var dateToEl = document.getElementById('investor-date-to');
+    var minPurchEl = document.getElementById('investor-min-purchases');
+    var maxPurchEl = document.getElementById('investor-max-purchases');
 
     if (searchEl) {
       searchEl.addEventListener('input', App.debounce(function () {
@@ -46,11 +51,20 @@
         loadInvestors();
       }, 300));
     }
-    if (tierEl) {
-      tierEl.addEventListener('change', function () { currentPage = 1; loadInvestors(); });
-    }
     if (sortEl) {
       sortEl.addEventListener('change', function () { currentPage = 1; loadInvestors(); });
+    }
+    if (dateFromEl) {
+      dateFromEl.addEventListener('change', function () { currentPage = 1; loadInvestors(); });
+    }
+    if (dateToEl) {
+      dateToEl.addEventListener('change', function () { currentPage = 1; loadInvestors(); });
+    }
+    if (minPurchEl) {
+      minPurchEl.addEventListener('change', function () { currentPage = 1; loadInvestors(); });
+    }
+    if (maxPurchEl) {
+      maxPurchEl.addEventListener('change', function () { currentPage = 1; loadInvestors(); });
     }
 
     document.getElementById('investors-list').addEventListener('click', function (e) {
@@ -62,13 +76,21 @@
   }
 
   function getFilters() {
-    return {
+    var minP = parseInt((document.getElementById('investor-min-purchases') || {}).value) || 2;
+    var maxP = parseInt((document.getElementById('investor-max-purchases') || {}).value) || 0;
+    var filters = {
       search: (document.getElementById('investor-search') || {}).value || '',
-      tier: (document.getElementById('investor-tier') || {}).value || '',
       sort: (document.getElementById('investor-sort') || {}).value || 'total_purchases',
+      min_purchases: minP,
       page: currentPage,
       limit: PAGE_SIZE
     };
+    var dateFrom = (document.getElementById('investor-date-from') || {}).value || '';
+    var dateTo = (document.getElementById('investor-date-to') || {}).value || '';
+    if (dateFrom) filters.date_from = dateFrom;
+    if (dateTo) filters.date_to = dateTo;
+    if (maxP > 0) filters.max_purchases = maxP;
+    return filters;
   }
 
   async function loadInvestors() {
@@ -103,6 +125,14 @@
         currentPage = page;
         loadInvestors();
       });
+
+      // Show total count
+      var start = (currentPage - 1) * PAGE_SIZE + 1;
+      var end = Math.min(currentPage * PAGE_SIZE, total);
+      var infoEl = document.createElement('span');
+      infoEl.className = 'page-info';
+      infoEl.textContent = 'Showing ' + start + '\u2013' + end + ' of ' + App.formatNumber(total);
+      paginationEl.insertBefore(infoEl, paginationEl.firstChild);
     } catch (e) {
       App.showError(listEl, 'Failed to load investors: ' + e.message, loadInvestors);
     }
@@ -111,12 +141,10 @@
   function renderCards(container, investors) {
     var html = '';
     investors.forEach(function (inv) {
-      var tierClass = (inv.investment_tier || inv.tier || 'small').toLowerCase();
       html +=
         '<div class="card card-clickable" data-investor="' + App.escapeHtml(inv.name || '') + '">' +
           '<div class="card-header">' +
             '<span class="card-title">' + App.escapeHtml(inv.name || 'Unknown') + '</span>' +
-            '<span class="tier-badge ' + tierClass + '">' + tierClass + '</span>' +
           '</div>' +
           '<div class="card-metrics">' +
             '<div class="card-metric"><span class="metric-label">Purchases</span><span class="metric-value">' + App.formatNumber(inv.total_purchases) + '</span></div>' +
@@ -138,15 +166,19 @@
     var html =
       '<div class="data-table-wrap" style="display:block;">' +
       '<table class="data-table"><thead><tr>' +
-        '<th>Name</th><th>Tier</th><th>Purchases</th><th>Total Spend</th><th>Avg Price</th><th>Top Area</th><th>First</th><th>Last</th>' +
+        '<th class="sortable-th" data-sort="name">Name</th>' +
+        '<th class="sortable-th" data-sort="total_purchases">Purchases</th>' +
+        '<th class="sortable-th" data-sort="total_spend">Total Spend</th>' +
+        '<th class="sortable-th" data-sort="avg_price">Avg Price</th>' +
+        '<th>Top Area</th>' +
+        '<th class="sortable-th" data-sort="first_purchase">First</th>' +
+        '<th class="sortable-th" data-sort="last_purchase">Last</th>' +
       '</tr></thead><tbody>';
 
     investors.forEach(function (inv) {
-      var tierClass = (inv.investment_tier || inv.tier || 'small').toLowerCase();
       html +=
         '<tr data-investor="' + App.escapeHtml(inv.name || '') + '" style="cursor:pointer;">' +
           '<td><strong>' + App.escapeHtml(inv.name || 'Unknown') + '</strong></td>' +
-          '<td><span class="tier-badge ' + tierClass + '">' + tierClass + '</span></td>' +
           '<td>' + App.formatNumber(inv.total_purchases) + '</td>' +
           '<td>' + App.formatCurrency(inv.total_spend) + '</td>' +
           '<td>' + App.formatCurrency(inv.avg_price) + '</td>' +
@@ -162,6 +194,20 @@
     container.querySelector('tbody').addEventListener('click', function (e) {
       var row = e.target.closest('tr[data-investor]');
       if (row) showInvestorDetail(row.getAttribute('data-investor'));
+    });
+
+    // Sortable column headers
+    container.querySelectorAll('.sortable-th').forEach(function (th) {
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', function () {
+        var sortKey = th.getAttribute('data-sort');
+        var sortEl = document.getElementById('investor-sort');
+        if (sortEl) {
+          sortEl.value = sortKey;
+          currentPage = 1;
+          loadInvestors();
+        }
+      });
     });
   }
 
@@ -184,43 +230,68 @@
     try {
       var data = await App.api('investor/' + encodeURIComponent(name), { limit: 50 });
       if (!data.data) throw new Error('No data returned');
+      cachedDetail = data.data;
+      investorDetailMap = null;
       renderInvestorDetail(listEl, data.data, data.meta, name);
     } catch (e) {
       App.showError(listEl, 'Failed to load investor: ' + e.message, function () { showInvestorDetail(name); });
     }
   }
 
+  var currentSection = 'purchases';
+
   function renderInvestorDetail(container, detail, meta, investorName) {
     var p = detail.profile;
     var purchases = detail.purchases || [];
+    var salesRecords = detail.sales || [];
+    var flips = detail.flips || [];
     var hoods = detail.neighborhoods || [];
+    var saleHoods = detail.sale_neighborhoods || [];
     var deedTypes = detail.deed_types || {};
-    var tierClass = (p.investment_tier || p.tier || 'small').toLowerCase();
+    currentSection = meta.section || 'purchases';
 
     var html = '<div class="detail-view">';
     html += '<button class="btn-back" onclick="InvestorsModule.backToList()">\u2190 Back to investors</button>';
 
     // Header
     html += '<div class="detail-header">';
-    html += '<h2>' + App.escapeHtml(p.name || 'Unknown') + ' <span class="tier-badge ' + tierClass + '">' + tierClass + '</span></h2>';
+    html += '<h2>' + App.escapeHtml(p.name || 'Unknown') + '</h2>';
     html += '<div class="card-metrics">';
-    html += '<div class="card-metric"><span class="metric-label">Total Purchases</span><span class="metric-value">' + App.formatNumber(p.total_purchases) + '</span></div>';
-    html += '<div class="card-metric"><span class="metric-label">Total Spend</span><span class="metric-value">' + App.formatCurrency(p.total_spend) + '</span></div>';
-    html += '<div class="card-metric"><span class="metric-label">Avg Price</span><span class="metric-value">' + App.formatCurrency(p.avg_price) + '</span></div>';
-    html += '<div class="card-metric"><span class="metric-label">Areas</span><span class="metric-value">' + App.formatNumber(p.neighborhood_count) + '</span></div>';
-    html += '<div class="card-metric"><span class="metric-label">First Purchase</span><span class="metric-value">' + App.formatDate(p.first_purchase) + '</span></div>';
-    html += '<div class="card-metric"><span class="metric-label">Last Purchase</span><span class="metric-value">' + App.formatDate(p.last_purchase) + '</span></div>';
+    html += '<div class="card-metric"><span class="metric-label">Purchases</span><span class="metric-value">' + App.formatNumber(p.total_purchases) + '</span></div>';
+    html += '<div class="card-metric"><span class="metric-label">Total Spent</span><span class="metric-value">' + App.formatCurrency(p.total_spend) + '</span></div>';
+    html += '<div class="card-metric"><span class="metric-label">Sales</span><span class="metric-value">' + App.formatNumber(p.total_sales) + '</span></div>';
+    html += '<div class="card-metric"><span class="metric-label">Revenue</span><span class="metric-value">' + App.formatCurrency(p.total_revenue) + '</span></div>';
+    html += '<div class="card-metric"><span class="metric-label">Flips</span><span class="metric-value">' + App.formatNumber(p.total_flips) + '</span></div>';
+    html += '<div class="card-metric"><span class="metric-label">Areas</span><span class="metric-value">' + App.formatNumber(p.neighborhoods_active) + '</span></div>';
     html += '</div></div>';
+
+    // Flips section (if any)
+    if (flips.length > 0) {
+      html += '<h3>\uD83D\uDD04 Flips (' + flips.length + ')</h3>';
+      html += '<div class="flip-list">';
+      flips.slice(0, 10).forEach(function (f) {
+        var profitClass = f.profit > 0 ? 'profit-pos' : f.profit < 0 ? 'profit-neg' : '';
+        html += '<div class="card detail-record">';
+        html += '<div class="card-header"><span class="card-title">' + App.escapeHtml(f.address || '?') + '</span>';
+        html += '<span class="card-badge ' + profitClass + '">' + (f.profit >= 0 ? '+' : '') + App.formatCurrencyFull(f.profit) + '</span></div>';
+        html += '<div class="kv-grid">';
+        html += '<div class="kv-item"><span class="kv-label">Bought</span><span class="kv-value">' + App.formatCurrencyFull(f.bought_price) + ' (' + App.formatDate(f.bought_date) + ')</span></div>';
+        html += '<div class="kv-item"><span class="kv-label">Sold</span><span class="kv-value">' + App.formatCurrencyFull(f.sold_price) + ' (' + App.formatDate(f.sold_date) + ')</span></div>';
+        html += '<div class="kv-item"><span class="kv-label">Hold Time</span><span class="kv-value">' + (f.hold_days || '?') + ' days</span></div>';
+        html += '<div class="kv-item"><span class="kv-label">Neighborhood</span><span class="kv-value">' + App.escapeHtml(f.neighborhood || '?') + '</span></div>';
+        html += '</div></div>';
+      });
+      html += '</div>';
+    }
 
     // Neighborhoods breakdown
     if (hoods.length > 0) {
-      html += '<h3>Neighborhoods (' + hoods.length + ')</h3>';
+      html += '<h3>Purchase Areas (' + hoods.length + ')</h3>';
       html += '<div class="detail-hoods">';
-      hoods.slice(0, 15).forEach(function (h) {
+      hoods.slice(0, 10).forEach(function (h) {
         html += '<div class="hood-row">';
-        html += '<span class="hood-name">' + App.escapeHtml(h.neighborhood) + '</span>';
-        html += '<span class="hood-count">' + h.count + ' purchases</span>';
-        html += '<span class="hood-amount">' + App.formatCurrency(h.total_spent) + '</span>';
+        html += '<span class="hood-name">' + App.escapeHtml(h.name) + '</span>';
+        html += '<span class="hood-count">' + h.count + '</span>';
         html += '</div>';
       });
       html += '</div>';
@@ -236,25 +307,41 @@
       html += '</div>';
     }
 
-    // Filter pills for purchases
+    // Map/List View Toggle
+    html += '<div class="detail-view-toggle" id="investor-view-toggle">';
+    html += '<button class="toggle-btn active" onclick="InvestorsModule.toggleDetailView(\'list\')">List View</button>';
+    html += '<button class="toggle-btn" onclick="InvestorsModule.toggleDetailView(\'map\')">Map View</button>';
+    html += '</div>';
+    html += '<div id="investor-map-container" style="display:none;">';
+    html += '<div id="investor-detail-map"></div>';
+    html += '<div class="map-legend">';
+    html += '<div class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> Purchase</div>';
+    html += '<div class="legend-item"><span class="legend-dot" style="background:#3b82f6;"></span> Sale</div>';
+    html += '</div></div>';
+    html += '<div id="investor-list-container">';
+
+    // Section toggle: Purchases vs Sales
     var encName = encodeURIComponent(investorName);
-    html += '<div class="loan-filters">';
-    html += '<h3>Purchases (' + (meta ? meta.total : purchases.length) + ' total)</h3>';
-    html += '<div class="filter-pills">';
+    html += '<div class="section-toggle" style="display:flex;gap:8px;margin:16px 0 8px;">';
+    html += '<button class="pill ' + (currentSection === 'purchases' ? 'active' : '') + '" onclick="InvestorsModule.switchSection(\'' + encName + '\', \'purchases\')">\uD83D\uDED2 Purchases (' + (meta.total_purchases || p.total_purchases) + ')</button>';
+    html += '<button class="pill ' + (currentSection === 'sales' ? 'active' : '') + '" onclick="InvestorsModule.switchSection(\'' + encName + '\', \'sales\')">\uD83D\uDCB0 Sales (' + (meta.total_sales || p.total_sales) + ')</button>';
+    html += '</div>';
+
+    // Filter pills
+    html += '<div class="filter-pills" style="margin-bottom:8px;">';
     html += '<button class="pill active" onclick="InvestorsModule.filterPurchases(\'' + encName + '\', \'\')">All</button>';
     html += '<button class="pill" onclick="InvestorsModule.filterPurchases(\'' + encName + '\', \'sub60k\')">Sub-$60K</button>';
     html += '<button class="pill" onclick="InvestorsModule.filterPurchases(\'' + encName + '\', \'over60k\')">&gt;$60K</button>';
-    html += '</div></div>';
-
-    // Purchases list
-    html += '<div id="investor-purchases-container">';
-    html += renderPurchaseCards(purchases);
     html += '</div>';
 
-    // Pagination for purchases
-    if (meta && meta.pages > 1) {
-      html += '<div id="investor-detail-pagination" class="pagination"></div>';
-    }
+    // Records list
+    var records = currentSection === 'sales' ? salesRecords : purchases;
+    html += '<div id="investor-purchases-container">';
+    html += renderPurchaseCards(records, currentSection);
+    html += '</div>';
+
+    html += '<div id="investor-detail-pagination" class="pagination"></div>';
+    html += '</div>'; // close investor-list-container
 
     html += '</div>';
     container.innerHTML = html;
@@ -268,28 +355,45 @@
     }
   }
 
-  function renderPurchaseCards(purchases) {
-    if (!purchases.length) return '<p class="empty-state">No purchases match this filter.</p>';
+  function renderPurchaseCards(records, section) {
+    if (!records || !records.length) return '<p class="empty-state">No ' + (section === 'sales' ? 'sales' : 'purchases') + ' match this filter.</p>';
 
+    var isSale = section === 'sales';
     var html = '';
-    purchases.forEach(function (s) {
+    records.forEach(function (s) {
       html += '<div class="card detail-record">';
       html += '<div class="card-header"><span class="card-title">' + App.escapeHtml(s.addr || 'Unknown Address') + '</span>';
       html += '<span class="card-badge">' + App.formatCurrencyFull(s.pr) + '</span></div>';
       html += '<div class="kv-grid">';
-
-      Object.keys(SALE_FIELDS).forEach(function (key) {
-        if (s[key] == null || s[key] === '') return;
-        var val = s[key];
-        if (key === 'pr') val = App.formatCurrencyFull(val);
-        else if (key === 'dt') val = App.formatDate(val);
-        else val = App.escapeHtml(String(val));
-        html += '<div class="kv-item"><span class="kv-label">' + SALE_FIELDS[key] + '</span><span class="kv-value">' + val + '</span></div>';
-      });
-
+      html += '<div class="kv-item"><span class="kv-label">Sale Date</span><span class="kv-value">' + App.formatDate(s.dt) + '</span></div>';
+      html += '<div class="kv-item"><span class="kv-label">Sale Price</span><span class="kv-value">' + App.formatCurrencyFull(s.pr) + '</span></div>';
+      if (isSale) {
+        html += '<div class="kv-item"><span class="kv-label">Sold To (Buyer)</span><span class="kv-value">' + App.escapeHtml(s.ge || '--') + '</span></div>';
+      } else {
+        html += '<div class="kv-item"><span class="kv-label">Grantor (Seller)</span><span class="kv-value">' + App.escapeHtml(s.gr || '--') + '</span></div>';
+      }
+      html += '<div class="kv-item"><span class="kv-label">Neighborhood</span><span class="kv-value">' + App.escapeHtml(s.nb || '--') + '</span></div>';
+      if (s.terms) html += '<div class="kv-item"><span class="kv-label">Terms</span><span class="kv-value">' + App.escapeHtml(s.terms) + '</span></div>';
+      if (s.pid) html += '<div class="kv-item"><span class="kv-label">Parcel ID</span><span class="kv-value">' + App.escapeHtml(s.pid) + '</span></div>';
       html += '</div></div>';
     });
     return html;
+  }
+
+  function switchSection(encodedName, section) {
+    var name = decodeURIComponent(encodedName);
+    currentSection = section;
+    detailPage = 1;
+    detailFilter = '';
+
+    // Update toggle buttons
+    document.querySelectorAll('.section-toggle .pill').forEach(function (p) { p.classList.remove('active'); });
+    if (event && event.target) event.target.classList.add('active');
+
+    // Reset filter pills
+    document.querySelectorAll('.filter-pills .pill').forEach(function (p, i) { p.classList.toggle('active', i === 0); });
+
+    loadDetailPage(name, 1);
   }
 
   async function loadDetailPage(name, page) {
@@ -298,12 +402,13 @@
     container.innerHTML = '<div class="spinner"></div>';
 
     try {
-      var params = { page: page, limit: 50 };
+      var params = { page: page, limit: 50, section: currentSection };
       if (detailFilter === 'sub60k') params.max_price = 60000;
       if (detailFilter === 'over60k') params.min_price = 60001;
 
       var data = await App.api('investor/' + encodeURIComponent(name), params);
-      container.innerHTML = renderPurchaseCards(data.data.purchases || []);
+      var records = currentSection === 'sales' ? (data.data.sales || []) : (data.data.purchases || []);
+      container.innerHTML = renderPurchaseCards(records, currentSection);
 
       var pagEl = document.getElementById('investor-detail-pagination');
       if (pagEl && data.meta) {
@@ -323,7 +428,7 @@
     document.querySelectorAll('.filter-pills .pill').forEach(function (p) { p.classList.remove('active'); });
     if (event && event.target) event.target.classList.add('active');
 
-    var params = { page: 1, limit: 50 };
+    var params = { page: 1, limit: 50, section: currentSection };
     if (filter === 'sub60k') params.max_price = 60000;
     if (filter === 'over60k') params.min_price = 60001;
 
@@ -332,7 +437,8 @@
     container.innerHTML = '<div class="spinner"></div>';
 
     App.api('investor/' + encodeURIComponent(name), params).then(function (data) {
-      container.innerHTML = renderPurchaseCards(data.data.purchases || []);
+      var records = currentSection === 'sales' ? (data.data.sales || []) : (data.data.purchases || []);
+      container.innerHTML = renderPurchaseCards(records, currentSection);
       var pagEl = document.getElementById('investor-detail-pagination');
       if (pagEl && data.meta) {
         App.renderPagination(pagEl, data.meta.page, data.meta.pages, function (p) { loadDetailPage(name, p); });
@@ -342,9 +448,82 @@
     });
   }
 
+  function toggleDetailView(view) {
+    var btns = document.querySelectorAll('#investor-view-toggle .toggle-btn');
+    btns.forEach(function (b, i) {
+      b.classList.toggle('active', (i === 0 && view === 'list') || (i === 1 && view === 'map'));
+    });
+    var mapContainer = document.getElementById('investor-map-container');
+    var listContainer = document.getElementById('investor-list-container');
+    if (view === 'map') {
+      if (mapContainer) mapContainer.style.display = '';
+      if (listContainer) listContainer.style.display = 'none';
+      if (!investorDetailMap) initInvestorMap();
+    } else {
+      if (mapContainer) mapContainer.style.display = 'none';
+      if (listContainer) listContainer.style.display = '';
+    }
+  }
+
+  function buildInvestorPopup(record, label) {
+    var html = '<div class="popup-content">';
+    html += '<div class="popup-address">' + App.escapeHtml(record.addr || '') + '</div>';
+    html += '<span class="popup-layer-badge" style="background:' + (label === 'Purchase' ? '#10b98133' : '#3b82f633') + ';color:' + (label === 'Purchase' ? '#10b981' : '#3b82f6') + ';">' + label + '</span>';
+    html += '<div class="popup-fields">';
+    html += '<div class="popup-field"><span class="popup-label">Price</span><span class="popup-value">' + App.formatCurrencyFull(record.pr) + '</span></div>';
+    html += '<div class="popup-field"><span class="popup-label">Date</span><span class="popup-value">' + App.formatDate(record.dt) + '</span></div>';
+    if (record.gr) html += '<div class="popup-field"><span class="popup-label">Seller</span><span class="popup-value">' + App.escapeHtml(record.gr) + '</span></div>';
+    if (record.ge) html += '<div class="popup-field"><span class="popup-label">Buyer</span><span class="popup-value">' + App.escapeHtml(record.ge) + '</span></div>';
+    if (record.tos) html += '<div class="popup-field"><span class="popup-label">Terms</span><span class="popup-value">' + App.escapeHtml(record.tos) + '</span></div>';
+    if (record.pid) html += '<div class="popup-field"><span class="popup-label">Parcel</span><span class="popup-value">' + App.escapeHtml(record.pid) + '</span></div>';
+    if (record.nb) html += '<div class="popup-field"><span class="popup-label">Area</span><span class="popup-value">' + App.escapeHtml(record.nb) + '</span></div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function initInvestorMap() {
+    var mapEl = document.getElementById('investor-detail-map');
+    if (!mapEl || !window.L) return;
+    investorDetailMap = L.map('investor-detail-map', {
+      center: [42.3314, -83.0458],
+      zoom: 12,
+      zoomControl: true
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '\u00a9 OSM \u00a9 CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(investorDetailMap);
+
+    var group = L.featureGroup();
+    var purchases = (cachedDetail && cachedDetail.purchases) || [];
+    var sales = (cachedDetail && cachedDetail.sales) || [];
+
+    purchases.forEach(function (p) {
+      if (!p.lat || !p.lng) return;
+      L.circleMarker([p.lat, p.lng], {
+        radius: 7, fillColor: '#10b981', color: '#10b981', weight: 1, opacity: 0.8, fillOpacity: 0.6
+      }).bindPopup(buildInvestorPopup(p, 'Purchase'), { className: 'dark-popup', maxWidth: 340 }).addTo(group);
+    });
+
+    sales.forEach(function (s) {
+      if (!s.lat || !s.lng) return;
+      L.circleMarker([s.lat, s.lng], {
+        radius: 7, fillColor: '#3b82f6', color: '#3b82f6', weight: 1, opacity: 0.8, fillOpacity: 0.6
+      }).bindPopup(buildInvestorPopup(s, 'Sale'), { className: 'dark-popup', maxWidth: 340 }).addTo(group);
+    });
+
+    group.addTo(investorDetailMap);
+    if (group.getBounds().isValid()) {
+      investorDetailMap.fitBounds(group.getBounds(), { padding: [30, 30] });
+    }
+  }
+
   function backToList() {
     currentView = 'list';
     currentPage = 1;
+    cachedDetail = null;
+    investorDetailMap = null;
     loadInvestors();
   }
 
@@ -357,7 +536,9 @@
     refresh: refresh,
     showInvestorDetail: showInvestorDetail,
     filterPurchases: filterPurchases,
-    backToList: backToList
+    switchSection: switchSection,
+    backToList: backToList,
+    toggleDetailView: toggleDetailView
   };
 
 })();

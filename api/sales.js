@@ -1,105 +1,49 @@
-const { handleCors, sendPaginated, sendError, intParam, floatParam, parseBounds, filterByBounds } = require('./_helpers');
+const { handleCors, sendJson, sendError, intParam } = require('./_helpers');
+const { supabase } = require('./_supabase');
 
-let salesData = null;
-
-function loadData() {
-  if (!salesData) {
-    salesData = require('./_data/sales.json');
-  }
-  return salesData;
-}
-
-/**
- * Expand compact field names to full names for API response
- */
-function expandSale(s) {
-  return {
-    id: s.id,
-    parcel_id: s.pid,
-    address: s.addr,
-    sale_date: s.dt,
-    sale_price: s.pr,
-    grantor: s.gr,
-    grantee: s.ge,
-    term_of_sale: s.tos,
-    sale_instrument: s.si,
-    property_class_code: s.pcc,
-    property_class_description: s.pcd,
-    neighborhood: s.nb,
-    ecf_neighborhood: s.ecf,
-    council_district: s.cd,
-    zip: s.zip,
-    lat: s.lat,
-    lng: s.lng,
-  };
-}
-
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   try {
-    const data = loadData();
-    const {
-      bounds, neighborhood, grantee, grantor,
-      min_price, max_price, date_from, date_to,
-      limit: limitParam, page: pageParam,
-    } = req.query;
+    const page = intParam(req.query.page, 1);
+    const limit = Math.min(intParam(req.query.limit, 50), 200);
+    const { neighborhood, min_price, max_price, start_date, end_date, grantee, bounds, sort } = req.query;
 
-    const limit = intParam(limitParam, 500);
-    const page = intParam(pageParam, 1);
-    const parsedBounds = parseBounds(bounds);
+    let query = supabase.from('sales')
+      .select('sales_id, address, sale_date, sale_price, grantor, grantee, neighborhood, ecf_neighborhood, parcel_id, zip_code, terms_of_sale, property_class_desc, latitude, longitude', { count: 'exact' });
 
-    let filtered = data;
+    if (neighborhood) query = query.ilike('neighborhood', `%${neighborhood}%`);
+    if (min_price) query = query.gte('sale_price', parseFloat(min_price));
+    if (max_price) query = query.lte('sale_price', parseFloat(max_price));
+    if (start_date) query = query.gte('sale_date', start_date);
+    if (end_date) query = query.lte('sale_date', end_date);
+    if (grantee) query = query.ilike('grantee', `%${grantee}%`);
 
-    // Filter by bounding box
-    if (parsedBounds) {
-      filtered = filterByBounds(filtered, parsedBounds);
+    if (bounds) {
+      const parts = bounds.split(',').map(Number);
+      if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+        query = query
+          .gte('latitude', parts[0]).lte('latitude', parts[2])
+          .gte('longitude', parts[1]).lte('longitude', parts[3]);
+      }
     }
 
-    // Filter by neighborhood
-    if (neighborhood) {
-      const nb = neighborhood.toLowerCase();
-      filtered = filtered.filter(s => s.nb && s.nb.toLowerCase() === nb);
-    }
+    const sortField = sort === 'price_asc' ? 'sale_price' : sort === 'price_desc' ? 'sale_price' : 'sale_date';
+    const ascending = sort === 'price_asc' || sort === 'date_asc';
+    query = query.order(sortField, { ascending }).range((page - 1) * limit, page * limit - 1);
 
-    // Filter by grantee
-    if (grantee) {
-      const ge = grantee.toLowerCase();
-      filtered = filtered.filter(s => s.ge && s.ge.toLowerCase().includes(ge));
-    }
+    const { data, count, error } = await query;
+    if (error) return sendError(res, error.message);
 
-    // Filter by grantor
-    if (grantor) {
-      const gr = grantor.toLowerCase();
-      filtered = filtered.filter(s => s.gr && s.gr.toLowerCase().includes(gr));
-    }
-
-    // Filter by min_price
-    const minPrice = floatParam(min_price);
-    if (minPrice !== null) {
-      filtered = filtered.filter(s => s.pr != null && s.pr >= minPrice);
-    }
-
-    // Filter by max_price
-    const maxPrice = floatParam(max_price);
-    if (maxPrice !== null) {
-      filtered = filtered.filter(s => s.pr != null && s.pr <= maxPrice);
-    }
-
-    // Filter by date_from
-    if (date_from) {
-      filtered = filtered.filter(s => s.dt && s.dt >= date_from);
-    }
-
-    // Filter by date_to
-    if (date_to) {
-      filtered = filtered.filter(s => s.dt && s.dt <= date_to);
-    }
-
-    // Expand field names for response
-    const expanded = filtered.map(expandSale);
-
-    sendPaginated(res, expanded, page, limit);
+    sendJson(res, {
+      data: (data || []).map(s => ({
+        id: s.sales_id, addr: s.address, dt: s.sale_date, pr: s.sale_price,
+        gr: s.grantor, ge: s.grantee, nb: s.neighborhood, ecf: s.ecf_neighborhood,
+        pid: s.parcel_id, zip: s.zip_code, terms: s.terms_of_sale,
+        class: s.property_class_desc, lat: s.latitude, lng: s.longitude,
+      })),
+      meta: { total: count, page, limit },
+    });
   } catch (err) {
     console.error('Error in /api/sales:', err);
     sendError(res, 'Internal server error');

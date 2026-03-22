@@ -1,64 +1,64 @@
-const { handleCors, sendPaginated, sendError, intParam } = require('./_helpers');
+const { handleCors, sendJson, sendError, intParam } = require('./_helpers');
+const { supabase } = require('./_supabase');
 
-let contractorsData = null;
-
-function loadData() {
-  if (!contractorsData) {
-    contractorsData = require('./_data/contractors.json');
-  }
-  return contractorsData;
-}
-
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   try {
-    const data = loadData();
-    const {
-      specialty, neighborhood, search,
-      sort, limit: limitParam, page: pageParam,
-    } = req.query;
+    const page = intParam(req.query.page, 1);
+    const limit = Math.min(intParam(req.query.limit, 50), 200);
+    const { neighborhood, q } = req.query;
 
-    const limit = intParam(limitParam, 50);
-    const page = intParam(pageParam, 1);
+    // Query permits and trades for contractor data
+    let permitsQ = supabase.from('permits').select('contractor_name, permit_type, neighborhood, estimated_cost, permit_issued')
+      .not('contractor_name', 'is', null);
+    let tradesQ = supabase.from('trades').select('contractor_name, permit_type, neighborhood, permit_issued')
+      .not('contractor_name', 'is', null);
 
-    let filtered = data;
-
-    // Filter by specialty (match top_specialty)
-    if (specialty) {
-      const sp = specialty.toLowerCase();
-      filtered = filtered.filter(c =>
-        c.top_specialty && c.top_specialty.toLowerCase().includes(sp)
-      );
-    }
-
-    // Filter by neighborhood
     if (neighborhood) {
-      const nb = neighborhood.toLowerCase();
-      filtered = filtered.filter(c =>
-        c.top_neighborhood && c.top_neighborhood.toLowerCase() === nb
-      );
+      permitsQ = permitsQ.ilike('neighborhood', `%${neighborhood}%`);
+      tradesQ = tradesQ.ilike('neighborhood', `%${neighborhood}%`);
+    }
+    if (q) {
+      permitsQ = permitsQ.ilike('contractor_name', `%${q}%`);
+      tradesQ = tradesQ.ilike('contractor_name', `%${q}%`);
     }
 
-    // Filter by search (case-insensitive name match)
-    if (search) {
-      const s = search.toLowerCase();
-      filtered = filtered.filter(c => c.name && c.name.toLowerCase().includes(s));
-    }
+    const [permitsRes, tradesRes] = await Promise.all([
+      permitsQ.limit(5000),
+      tradesQ.limit(5000),
+    ]);
 
-    // Sort
-    if (sort) {
-      switch (sort) {
-        case 'permits':
-          filtered = filtered.slice().sort((a, b) => (b.total_permits || 0) - (a.total_permits || 0));
-          break;
-        case 'recent':
-          filtered = filtered.slice().sort((a, b) => (b.recent_permits || 0) - (a.recent_permits || 0));
-          break;
+    const all = [...(permitsRes.data || []), ...(tradesRes.data || [])];
+    const grouped = {};
+    for (const p of all) {
+      const name = p.contractor_name;
+      if (!name || name.length < 2) continue;
+      if (!grouped[name]) grouped[name] = { name, total_permits: 0, types: {}, neighborhoods: {}, recent: null };
+      grouped[name].total_permits++;
+      if (p.permit_type) grouped[name].types[p.permit_type] = (grouped[name].types[p.permit_type] || 0) + 1;
+      if (p.neighborhood) grouped[name].neighborhoods[p.neighborhood] = (grouped[name].neighborhoods[p.neighborhood] || 0) + 1;
+      if (p.permit_issued && (!grouped[name].recent || p.permit_issued > grouped[name].recent)) {
+        grouped[name].recent = p.permit_issued;
       }
     }
 
-    sendPaginated(res, filtered, page, limit);
+    const contractors = Object.values(grouped)
+      .map(g => ({
+        name: g.name,
+        total_permits: g.total_permits,
+        top_specialty: Object.entries(g.types).sort((a,b) => b[1]-a[1])[0]?.[0] || null,
+        top_neighborhood: Object.entries(g.neighborhoods).sort((a,b) => b[1]-a[1])[0]?.[0] || null,
+        neighborhood_count: Object.keys(g.neighborhoods).length,
+        most_recent: g.recent,
+      }))
+      .sort((a, b) => b.total_permits - a.total_permits);
+
+    const start = (page - 1) * limit;
+    sendJson(res, {
+      data: contractors.slice(start, start + limit),
+      meta: { total: contractors.length, page, limit },
+    });
   } catch (err) {
     console.error('Error in /api/contractors:', err);
     sendError(res, 'Internal server error');

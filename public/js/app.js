@@ -202,6 +202,15 @@
       case 'map':
         if (window.MapModule) window.MapModule.init();
         break;
+      case 'search':
+        if (window.SearchModule) window.SearchModule.init();
+        break;
+      case 'saved':
+        if (window.SavedModule) window.SavedModule.init();
+        break;
+      case 'reports':
+        if (window.ReportsModule) window.ReportsModule.init();
+        break;
       case 'investors':
         if (window.InvestorsModule) window.InvestorsModule.init();
         break;

@@ -1,0 +1,8 @@
+api/_data/raw/
+api/_data/*.csv
+api/_data/*.geojson
+scripts/
+supabase/
+REFACTOR_SPEC.md
+*.csv
+*.geojson

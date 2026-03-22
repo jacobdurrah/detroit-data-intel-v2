@@ -1,0 +1,57 @@
+{
+  "vacant": {
+    "offset": 1417,
+    "loaded": 1417,
+    "done": true
+  },
+  "presale": {
+    "offset": 15060,
+    "loaded": 15060,
+    "done": true
+  },
+  "demos": {
+    "offset": 16089,
+    "loaded": 16089,
+    "done": true
+  },
+  "rentals": {
+    "offset": 38179,
+    "loaded": 38179,
+    "done": true
+  },
+  "dlba_auction": {
+    "offset": 5418,
+    "loaded": 5418,
+    "done": true
+  },
+  "dlba_owned": {
+    "offset": 59310,
+    "loaded": 59310,
+    "done": true
+  },
+  "permits": {
+    "offset": 43830,
+    "loaded": 43830,
+    "done": true
+  },
+  "trades": {
+    "offset": 112096,
+    "loaded": 112096,
+    "done": true
+  },
+  "assessment": {
+    "offset": 388147,
+    "loaded": 388147,
+    "done": true
+  },
+  "sales": {
+    "offset": 505852,
+    "loaded": 505852,
+    "done": true
+  },
+  "blight": {
+    "offset": 872697,
+    "loaded": 872697,
+    "done": true
+  }
+}

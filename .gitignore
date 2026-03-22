@@ -28,3 +28,10 @@ coverage/
 # Build output
 .output/
 dist/
+api/_data/raw/
+
+# Raw data files (too large for git/Vercel)
+api/_data/raw/
+*.csv
+*.geojson
+data/

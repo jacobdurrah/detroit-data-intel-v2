@@ -10,6 +10,8 @@
   var initialized = false;
   var specialtiesLoaded = false;
   var currentView = 'list';
+  var cachedContractorDetail = null;
+  var contractorDetailMap = null;
 
   var TRADE_FIELDS = {
     id: 'Record ID', addr: 'Address', type: 'Permit Type', desc: 'Work Description',
@@ -166,6 +168,8 @@
     try {
       var data = await App.api('contractor/' + encodeURIComponent(name), { limit: 50 });
       if (!data.data) throw new Error('No data returned');
+      cachedContractorDetail = data.data;
+      contractorDetailMap = null;
       renderContractorDetail(listEl, data.data, data.meta, name);
     } catch (e) {
       App.showError(listEl, 'Failed to load contractor: ' + e.message, function () { showContractorDetail(name); });
@@ -205,6 +209,18 @@
       html += '<div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Address: ' + App.escapeHtml(p.contact_address) + '</div>';
     }
     html += '</div>';
+
+    // Map/List View Toggle
+    html += '<div class="detail-view-toggle" id="contractor-view-toggle">';
+    html += '<button class="toggle-btn active" onclick="ContractorsModule.toggleDetailView(\'list\')">List View</button>';
+    html += '<button class="toggle-btn" onclick="ContractorsModule.toggleDetailView(\'map\')">Map View</button>';
+    html += '</div>';
+    html += '<div id="contractor-map-container" style="display:none;">';
+    html += '<div id="contractor-detail-map"></div>';
+    html += '<div class="map-legend">';
+    html += '<div class="legend-item"><span class="legend-dot" style="background:#06b6d4;"></span> Permit Location</div>';
+    html += '</div></div>';
+    html += '<div id="contractor-list-container">';
 
     // Neighborhoods breakdown
     if (hoods.length > 0) {
@@ -259,6 +275,7 @@
       html += '<div id="contractor-detail-pagination" class="pagination"></div>';
     }
 
+    html += '</div>'; // close contractor-list-container
     html += '</div>';
     container.innerHTML = html;
 
@@ -335,9 +352,76 @@
     });
   }
 
+  function toggleDetailView(view) {
+    var btns = document.querySelectorAll('#contractor-view-toggle .toggle-btn');
+    btns.forEach(function (b, i) {
+      b.classList.toggle('active', (i === 0 && view === 'list') || (i === 1 && view === 'map'));
+    });
+    var mapContainer = document.getElementById('contractor-map-container');
+    var listContainer = document.getElementById('contractor-list-container');
+    if (view === 'map') {
+      if (mapContainer) mapContainer.style.display = '';
+      if (listContainer) listContainer.style.display = 'none';
+      if (!contractorDetailMap) initContractorMap();
+    } else {
+      if (mapContainer) mapContainer.style.display = 'none';
+      if (listContainer) listContainer.style.display = '';
+    }
+  }
+
+  async function initContractorMap() {
+    var mapEl = document.getElementById('contractor-detail-map');
+    if (!mapEl || !window.L) return;
+    contractorDetailMap = L.map('contractor-detail-map', {
+      center: [42.3314, -83.0458],
+      zoom: 12,
+      zoomControl: true
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '\u00a9 OSM \u00a9 CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(contractorDetailMap);
+
+    // Fetch permit locations with lat/lng from dedicated endpoint
+    var contractorName = (cachedContractorDetail && cachedContractorDetail.profile && cachedContractorDetail.profile.name) || '';
+    var points = [];
+    try {
+      var data = await App.api('contractor-permits', { name: contractorName });
+      points = data.data || data || [];
+    } catch (e) {
+      // Fallback to cached trades
+      points = (cachedContractorDetail && cachedContractorDetail.trades) || [];
+    }
+
+    var group = L.featureGroup();
+    points.forEach(function (t) {
+      if (!t.lat || !t.lng) return;
+      L.circleMarker([t.lat, t.lng], {
+        radius: 7, fillColor: '#06b6d4', color: '#06b6d4', weight: 1, opacity: 0.8, fillOpacity: 0.6
+      }).bindPopup(
+        '<div class="popup-content"><div class="popup-address">' + App.escapeHtml(t.addr || '') + '</div>' +
+        '<div class="popup-fields">' +
+        (t.type ? '<div class="popup-field"><span class="popup-label">Type</span><span class="popup-value">' + App.escapeHtml(t.type) + '</span></div>' : '') +
+        (t.dt ? '<div class="popup-field"><span class="popup-label">Date</span><span class="popup-value">' + App.formatDate(t.dt) + '</span></div>' : '') +
+        (t.desc ? '<div class="popup-field"><span class="popup-label">Description</span><span class="popup-value">' + App.escapeHtml((t.desc || '').substring(0, 100)) + '</span></div>' : '') +
+        (t.nb ? '<div class="popup-field"><span class="popup-label">Area</span><span class="popup-value">' + App.escapeHtml(t.nb) + '</span></div>' : '') +
+        '</div></div>',
+        { className: 'dark-popup' }
+      ).addTo(group);
+    });
+
+    group.addTo(contractorDetailMap);
+    if (group.getBounds().isValid()) {
+      contractorDetailMap.fitBounds(group.getBounds(), { padding: [30, 30] });
+    }
+  }
+
   function backToList() {
     currentView = 'list';
     currentPage = 1;
+    cachedContractorDetail = null;
+    contractorDetailMap = null;
     loadContractors();
   }
 
@@ -350,7 +434,8 @@
     refresh: refresh,
     showContractorDetail: showContractorDetail,
     filterTrades: filterTrades,
-    backToList: backToList
+    backToList: backToList,
+    toggleDetailView: toggleDetailView
   };
 
 })();

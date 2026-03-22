@@ -1,76 +1,134 @@
 const { handleCors, sendJson, sendError } = require('../_helpers');
-
-let salesData = null;
-let permitsData = null;
-let tradesData = null;
-let blightData = null;
-
-function load(name) {
-  switch (name) {
-    case 'sales': if (!salesData) salesData = require('../_data/sales.json'); return salesData;
-    case 'permits': if (!permitsData) permitsData = require('../_data/permits.json'); return permitsData;
-    case 'trades': if (!tradesData) tradesData = require('../_data/trades.json'); return tradesData;
-    case 'blight': if (!blightData) blightData = require('../_data/blight.json'); return blightData;
-  }
-}
+const { supabase } = require('../_supabase');
 
 function normalizeAddress(addr) {
   if (!addr) return '';
   return addr.toUpperCase().replace(/[.,#]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   try {
     const { address } = req.query;
     if (!address) return sendError(res, 'Address parameter is required', 400);
 
-    const normalized = normalizeAddress(decodeURIComponent(address));
+    const raw = decodeURIComponent(address);
+    const normalized = normalizeAddress(raw);
+    const pattern = `%${normalized}%`;
 
-    // Cross-reference across all datasets
-    const sales = load('sales').filter(s => normalizeAddress(s.addr) === normalized);
-    const permits = load('permits').filter(p => normalizeAddress(p.addr) === normalized);
-    const trades = load('trades').filter(t => normalizeAddress(t.addr) === normalized);
-    const blight = load('blight').filter(b => normalizeAddress(b.addr) === normalized);
+    // Query all 11 tables in parallel
+    const [
+      salesRes, blightRes, permitsRes, tradesRes, assessmentRes,
+      rentalsRes, presaleRes, demosRes, vacantRes, dlbaOwnedRes, dlbaAuctionRes
+    ] = await Promise.all([
+      supabase.from('sales').select('*').ilike('address', pattern).order('sale_date', { ascending: false }).limit(50),
+      supabase.from('blight').select('*').or(`street_name.ilike.${pattern},street_number.ilike.${pattern}`).order('ticket_issued_date', { ascending: false }).limit(50),
+      supabase.from('permits').select('*').ilike('address', pattern).order('permit_issued', { ascending: false }).limit(50),
+      supabase.from('trades').select('*').ilike('address', pattern).order('permit_issued', { ascending: false }).limit(50),
+      supabase.from('assessment').select('*').ilike('address', pattern).limit(5),
+      supabase.from('rentals').select('*').ilike('address', pattern).limit(10),
+      supabase.from('presale').select('*').ilike('address', pattern).limit(10),
+      supabase.from('demos').select('*').ilike('address', pattern).limit(10),
+      supabase.from('vacant').select('*').ilike('address', pattern).limit(10),
+      supabase.from('dlba_owned').select('*').ilike('address', pattern).limit(5),
+      supabase.from('dlba_auction').select('*').ilike('address', pattern).limit(10),
+    ]);
 
-    // Sort each by date descending
-    sales.sort((a, b) => (b.dt || '').localeCompare(a.dt || ''));
-    permits.sort((a, b) => (b.dt || '').localeCompare(a.dt || ''));
-    trades.sort((a, b) => (b.dt || '').localeCompare(a.dt || ''));
-    blight.sort((a, b) => (b.dt || '').localeCompare(a.dt || ''));
+    const sales = salesRes.data || [];
+    const blight = blightRes.data || [];
+    const permits = permitsRes.data || [];
+    const trades = tradesRes.data || [];
+    const assessment = assessmentRes.data || [];
+    const rentals = rentalsRes.data || [];
+    const presale = presaleRes.data || [];
+    const demos = demosRes.data || [];
+    const vacant = vacantRes.data || [];
+    const dlbaOwned = dlbaOwnedRes.data || [];
+    const dlbaAuction = dlbaAuctionRes.data || [];
 
     // Build owner history from sales
     const owners = sales.map(s => ({
-      name: s.ge,
-      date: s.dt,
-      price: s.pr,
-      from: s.gr,
+      name: s.grantee,
+      date: s.sale_date,
+      price: s.sale_price,
+      from: s.grantor,
     }));
+
+    // Assessment data
+    const assess = assessment[0] || null;
 
     // Motivated seller signals
     const signals = [];
-    if (blight.length > 0) signals.push(blight.length + ' blight ticket' + (blight.length > 1 ? 's' : ''));
-    const totalFines = blight.reduce((sum, b) => sum + (b.fine || 0), 0);
-    if (totalFines > 0) signals.push('$' + totalFines.toLocaleString() + ' in fines');
-    if (sales.length > 0 && sales[0].pr < 60000) signals.push('Low sale price ($' + (sales[0].pr || 0).toLocaleString() + ')');
-    if (sales.length > 1) signals.push(sales.length + ' ownership changes');
+    if (blight.length > 0) signals.push(`${blight.length} blight ticket${blight.length > 1 ? 's' : ''}`);
+    const totalFines = blight.reduce((sum, b) => sum + (parseFloat(b.fine_amount) || 0), 0);
+    const totalBalance = blight.reduce((sum, b) => sum + (parseFloat(b.balance_due) || 0), 0);
+    if (totalFines > 0) signals.push(`$${totalFines.toLocaleString()} in fines`);
+    if (totalBalance > 0) signals.push(`$${totalBalance.toLocaleString()} balance due`);
+    if (sales.length > 0 && sales[0].sale_price < 60000) signals.push(`Low sale price ($${(sales[0].sale_price || 0).toLocaleString()})`);
+    if (sales.length > 1) signals.push(`${sales.length} ownership changes`);
     if (permits.length === 0 && trades.length === 0) signals.push('No permit activity');
+    if (dlbaOwned.length > 0) signals.push('DLBA-owned property');
+    if (vacant.length > 0) signals.push('Registered vacant');
+    if (demos.length > 0) signals.push(`${demos.length} demolition permit${demos.length > 1 ? 's' : ''}`);
+    if (presale.length > 0) {
+      const failed = presale.filter(p => p.status === 'FAIL' || p.rating === 'FAIL');
+      if (failed.length > 0) signals.push(`Failed presale inspection`);
+    }
 
-    // Get location info from first available record
-    const firstRecord = sales[0] || permits[0] || trades[0] || blight[0] || {};
+    // Get location from first available record
+    const firstRecord = sales[0] || permits[0] || assessment[0] || blight[0] || {};
 
     sendJson(res, {
       data: {
-        address: decodeURIComponent(address),
-        neighborhood: firstRecord.nb || null,
-        lat: firstRecord.lat || null,
-        lng: firstRecord.lng || null,
-        parcel_id: firstRecord.pid || null,
-        sales,
-        permits,
-        trades,
-        blight,
+        address: raw,
+        neighborhood: firstRecord.neighborhood || assess?.neighborhood || null,
+        lat: firstRecord.latitude || assess?.latitude || null,
+        lng: firstRecord.longitude || assess?.longitude || null,
+        parcel_id: firstRecord.parcel_id || assess?.parcel_id || null,
+        assessment: assess ? {
+          assessed_value: assess.total_assessed_value,
+          taxable_value: assess.total_taxable_value,
+          land_value: assess.land_value,
+          improvement_value: assess.improvement_value,
+          year_built: assess.year_built,
+          bedrooms: assess.bedrooms,
+          full_baths: assess.full_baths,
+          half_baths: assess.half_baths,
+          bldg_class: assess.bldg_class,
+          total_floor_area: assess.total_floor_area,
+          property_class: assess.property_class,
+          owner_name: assess.owner_name,
+          tax_status: assess.tax_status,
+        } : null,
+        rental: rentals.length > 0 ? rentals : null,
+        presale: presale.length > 0 ? presale : null,
+        dlba_owned: dlbaOwned.length > 0,
+        dlba_auction: dlbaAuction.length > 0 ? dlbaAuction : null,
+        vacant: vacant.length > 0 ? vacant : null,
+        demolitions: demos.length > 0 ? demos : null,
+        sales: sales.map(s => ({
+          id: s.sales_id, addr: s.address, dt: s.sale_date, pr: s.sale_price,
+          ge: s.grantee, gr: s.grantor, nb: s.neighborhood, pid: s.parcel_id,
+          terms: s.terms_of_sale, lat: s.latitude, lng: s.longitude,
+        })),
+        permits: permits.map(p => ({
+          id: p.permit_no, addr: p.address, dt: p.permit_issued, type: p.permit_type,
+          desc: p.description, cost: p.estimated_cost, contractor: p.contractor_name,
+          nb: p.neighborhood, pid: p.parcel_id, lat: p.latitude, lng: p.longitude,
+        })),
+        trades: trades.map(t => ({
+          id: t.permit_no, addr: t.address, dt: t.permit_issued, type: t.permit_type,
+          desc: t.description, contractor: t.contractor_name,
+          nb: t.neighborhood, pid: t.parcel_id, lat: t.latitude, lng: t.longitude,
+        })),
+        blight: blight.map(b => ({
+          id: b.ticket_id, addr: `${b.street_number || ''} ${b.street_name || ''}`.trim(),
+          dt: b.ticket_issued_date, code: b.violation_code, desc: b.violation_description,
+          fine: b.fine_amount, judgment: b.judgment_amount, balance: b.balance_due,
+          status: b.payment_status, disposition: b.disposition,
+          nb: b.neighborhood, lat: b.latitude, lng: b.longitude,
+        })),
         owners,
         signals,
         summary: {
@@ -79,9 +137,12 @@ module.exports = (req, res) => {
           total_trades: trades.length,
           total_blight: blight.length,
           total_fines: totalFines,
-          last_sale_date: sales[0] ? sales[0].dt : null,
-          last_sale_price: sales[0] ? sales[0].pr : null,
-          current_owner: owners[0] ? owners[0].name : null,
+          total_balance_due: totalBalance,
+          last_sale_date: sales[0]?.sale_date || null,
+          last_sale_price: sales[0]?.sale_price || null,
+          current_owner: owners[0]?.name || assess?.owner_name || null,
+          assessed_value: assess?.total_assessed_value || null,
+          year_built: assess?.year_built || null,
         },
       },
     });

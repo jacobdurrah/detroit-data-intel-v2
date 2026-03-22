@@ -1,110 +1,79 @@
-const { handleCors, sendJson, sendError, intParam } = require('../_helpers');
+const { handleCors, sendJson, sendError } = require('../_helpers');
+const { supabase } = require('../_supabase');
 
-let tradesData = null;
-let permitsData = null;
-
-function loadTrades() {
-  if (!tradesData) tradesData = require('../_data/trades.json');
-  return tradesData;
-}
-
-function loadPermits() {
-  if (!permitsData) permitsData = require('../_data/permits.json');
-  return permitsData;
-}
-
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   try {
-    const { name, page: pageParam, limit: limitParam, permit_type, neighborhood, date_from, date_to } = req.query;
+    const { name } = req.query;
     if (!name) return sendError(res, 'Name parameter is required', 400);
 
-    const decodedName = decodeURIComponent(name).toUpperCase();
-    const trades = loadTrades();
-    const permits = loadPermits();
+    const decoded = decodeURIComponent(name);
+    const pattern = `%${decoded}%`;
 
-    // Find all trade permits by this contractor (match on biz or con field)
-    let contractorTrades = trades.filter(t =>
-      (t.biz && t.biz.toUpperCase() === decodedName) ||
-      (t.con && t.con.toUpperCase() === decodedName)
-    );
+    const [permitsRes, tradesRes] = await Promise.all([
+      supabase.from('permits').select('*').ilike('contractor_name', pattern).order('permit_issued', { ascending: false }).limit(200),
+      supabase.from('trades').select('*').ilike('contractor_name', pattern).order('permit_issued', { ascending: false }).limit(200),
+    ]);
 
-    // Build profile from trade data
-    const permTypeCounts = {};
-    const neighborhoodCounts = {};
-    const ownerSet = new Set();
-    const addressSet = new Set();
-    contractorTrades.forEach(t => {
-      const pt = t.type || 'Unknown';
-      permTypeCounts[pt] = (permTypeCounts[pt] || 0) + 1;
-      const nb = t.nb || 'Unknown';
-      neighborhoodCounts[nb] = (neighborhoodCounts[nb] || 0) + 1;
-      if (t.own) ownerSet.add(t.own);
-      if (t.addr) addressSet.add(t.addr);
-    });
+    const permits = permitsRes.data || [];
+    const trades = tradesRes.data || [];
+    const all = [...permits, ...trades];
 
-    const dates = contractorTrades
-      .map(t => t.dt)
-      .filter(Boolean)
-      .sort();
+    if (all.length === 0) return sendError(res, 'Contractor not found', 404);
 
-    // Find linked building permits (match on address)
-    const tradeAddresses = new Set(contractorTrades.map(t => t.addr).filter(Boolean));
-    const linkedPermits = permits.filter(p => tradeAddresses.has(p.addr)).slice(0, 50);
-
-    // Apply filters
-    if (permit_type) {
-      contractorTrades = contractorTrades.filter(t => t.type === permit_type);
-    }
-    if (neighborhood) {
-      contractorTrades = contractorTrades.filter(t =>
-        t.nb && t.nb.toUpperCase() === neighborhood.toUpperCase()
-      );
-    }
-    if (date_from) {
-      contractorTrades = contractorTrades.filter(t => t.dt && t.dt >= date_from);
-    }
-    if (date_to) {
-      contractorTrades = contractorTrades.filter(t => t.dt && t.dt <= date_to);
+    const neighborhoods = {};
+    const types = {};
+    for (const p of all) {
+      if (p.neighborhood) neighborhoods[p.neighborhood] = (neighborhoods[p.neighborhood] || 0) + 1;
+      if (p.permit_type) types[p.permit_type] = (types[p.permit_type] || 0) + 1;
     }
 
-    // Sort by date descending
-    contractorTrades.sort((a, b) => (b.dt || '').localeCompare(a.dt || ''));
+    // Build unique properties and owners
+    const uniqueAddrs = new Set();
+    const uniqueOwners = new Set();
+    let firstDate = null, lastDate = null;
+    for (const p of all) {
+      if (p.address) uniqueAddrs.add(p.address);
+      const desc = (p.description || '');
+      if (p.permit_issued) {
+        if (!firstDate || p.permit_issued < firstDate) firstDate = p.permit_issued;
+        if (!lastDate || p.permit_issued > lastDate) lastDate = p.permit_issued;
+      }
+    }
 
-    const total = contractorTrades.length;
-    const page = intParam(pageParam, 1);
-    const limit = Math.min(intParam(limitParam, 50), 200);
+    const nbSorted = Object.entries(neighborhoods).sort((a,b) => b[1]-a[1]);
+    const typeSorted = Object.entries(types).sort((a,b) => b[1]-a[1]);
+
+    // Format trades for frontend
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const start = (page - 1) * limit;
-    const paged = contractorTrades.slice(start, start + limit);
-
-    const neighborhoods = Object.entries(neighborhoodCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const profile = {
-      name: decodedName,
-      total_permits: trades.filter(t =>
-        (t.biz && t.biz.toUpperCase() === decodedName) ||
-        (t.con && t.con.toUpperCase() === decodedName)
-      ).length,
-      permit_types: permTypeCounts,
-      neighborhoods_served: Object.keys(neighborhoodCounts).length,
-      unique_properties: addressSet.size,
-      unique_owners: ownerSet.size,
-      first_permit: dates[0] || null,
-      last_permit: dates[dates.length - 1] || null,
-      contact_address: (contractorTrades[0] || {}).kaddr || (contractorTrades[0] || {}).caddr || null,
-    };
+    const paged = all.slice(start, start + limit);
 
     sendJson(res, {
       data: {
-        profile,
-        trades: paged,
-        neighborhoods,
-        linked_permits: linkedPermits,
+        profile: {
+          name: decoded,
+          total_permits: all.length,
+          building_permits: permits.length,
+          trade_permits: trades.length,
+          neighborhoods_served: nbSorted.length,
+          unique_properties: uniqueAddrs.size,
+          unique_owners: uniqueOwners.size,
+          first_permit: firstDate,
+          last_permit: lastDate,
+          top_specialty: typeSorted[0]?.[0] || null,
+        },
+        specialties: typeSorted.map(([t,c]) => ({ type: t, count: c })),
+        neighborhoods: nbSorted.map(([n,c]) => ({ name: n, count: c })),
+        trades: paged.map(p => ({
+          id: p.permit_no, addr: p.address, type: p.permit_type,
+          desc: p.description, dt: p.permit_issued, nb: p.neighborhood,
+          contractor: p.contractor_name,
+        })),
       },
-      meta: { total, page, limit, pages: Math.ceil(total / limit) },
+      meta: { page, limit, pages: Math.ceil(all.length / limit), total: all.length },
     });
   } catch (err) {
     console.error('Error in /api/contractor/[name]:', err);

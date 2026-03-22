@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=20260320c">
 </head>
 <body>
   <div id="app">
@@ -44,6 +44,10 @@
     <main id="content">
       <!-- Map Tab -->
       <div id="tab-map" class="tab-content active">
+        <div class="map-search" id="map-search">
+          <input type="text" id="map-search-input" placeholder="Search address..." class="search-input" autocomplete="off">
+          <button id="map-search-btn" aria-label="Search address">&#128269;</button>
+        </div>
         <div id="map"></div>
         <div id="map-layers" class="layer-panel">
           <button id="layer-toggle-btn" class="layer-toggle-btn" aria-label="Toggle layers">
@@ -63,26 +67,131 @@
             <label class="layer-check"><input type="checkbox" data-layer="rentals"><span class="layer-dot" style="background:#06b6d4"></span>Rentals</label>
             <label class="layer-check"><input type="checkbox" data-layer="crime"><span class="layer-dot" style="background:#dc2626"></span>Crime</label>
             <label class="layer-check"><input type="checkbox" data-layer="vacant"><span class="layer-dot" style="background:#d97706"></span>Vacant</label>
+            <label class="layer-check"><input type="checkbox" data-layer="newbuilds"><span class="layer-dot" style="background:#22d3ee"></span>New Builds</label>
+            <label class="layer-check"><input type="checkbox" data-layer="leadreplace"><span class="layer-dot" style="background:#a855f7"></span>Lead Line Replace</label>
+            <label class="layer-check"><input type="checkbox" data-layer="density"><span class="layer-dot" style="background:#f472b6"></span>Pop Density</label>
+            <label class="layer-check"><input type="checkbox" data-layer="foreclosures"><span class="layer-dot" style="background:#f43f5e"></span>Foreclosures</label>
+            <div class="view-toggle" style="margin-top:8px;">
+              <button class="toggle-btn active" id="map-mode-cluster">Clusters</button>
+              <button class="toggle-btn" id="map-mode-heat">Heatmap</button>
+            </div>
+            <div class="time-filter">
+              <label>Time Range</label>
+              <select id="map-time-range">
+                <option value="all">All Time</option>
+                <option value="6m">Last 6 Months</option>
+                <option value="1y" selected>Last Year</option>
+                <option value="2y">Last 2 Years</option>
+                <option value="5y">Last 5 Years</option>
+              </select>
+            </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Search Tab -->
+      <div id="tab-search" class="tab-content">
+        <div class="tab-panel">
+          <div class="filter-bar search-filter-bar">
+            <input type="date" id="search-date" class="filter-input">
+            <div class="search-stats" id="search-stats"></div>
+          </div>
+          <div id="search-list" class="card-grid">
+            <div class="loading-state">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
+          <div id="search-pagination" class="pagination"></div>
+        </div>
+      </div>
+
+      <!-- Saved Tab -->
+      <div id="tab-saved" class="tab-content">
+        <div class="tab-panel">
+          <div class="filter-bar" style="flex-wrap:wrap;gap:8px;">
+            <div class="status-pills" id="saved-status-pills" style="flex:1;">
+              <button class="pill-btn active" data-status="">All</button>
+              <button class="pill-btn" data-status="researching">Researching</button>
+              <button class="pill-btn" data-status="offer_pending">Offer Pending</button>
+              <button class="pill-btn" data-status="under_contract">Under Contract</button>
+              <button class="pill-btn" data-status="closed">Closed</button>
+              <button class="pill-btn" data-status="passed">Passed</button>
+            </div>
+            <button id="btn-add-property" class="pill-btn" style="background:var(--accent);color:white;font-weight:bold;">+ Add Property</button>
+          </div>
+          <div id="add-property-form" style="display:none;padding:12px;background:var(--surface);border-radius:8px;margin:0 12px 12px;">
+            <input type="text" id="add-property-address" placeholder="Enter full address (e.g. 1234 Main St, Detroit, MI 48224)" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:14px;box-sizing:border-box;margin-bottom:8px;">
+            <div style="display:flex;gap:8px;">
+              <input type="number" id="add-property-price" placeholder="List price ($)" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:14px;">
+              <input type="text" id="add-property-neighborhood" placeholder="Neighborhood" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:14px;">
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button id="btn-save-new-property" class="pill-btn" style="background:#10b981;color:white;flex:1;padding:10px;font-weight:bold;">Save &amp; Request DD Report</button>
+              <button id="btn-cancel-add" class="pill-btn" style="background:var(--border);color:var(--text);padding:10px;">Cancel</button>
+            </div>
+          </div>
+          <div id="saved-list" class="card-grid">
+            <div class="loading-state">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
+          <div id="saved-pagination" class="pagination"></div>
+        </div>
+      </div>
+
+      <!-- Reports Tab -->
+      <div id="tab-reports" class="tab-content">
+        <div class="tab-panel">
+          <div class="filter-bar">
+            <div class="status-pills" id="reports-verdict-pills">
+              <button class="pill-btn active" data-verdict="">All</button>
+              <button class="pill-btn pill-buy" data-verdict="BUY">BUY</button>
+              <button class="pill-btn pill-watch" data-verdict="WATCH">WATCH</button>
+              <button class="pill-btn pill-pass" data-verdict="PASS">PASS</button>
+            </div>
+          </div>
+          <div id="reports-list" class="card-grid">
+            <div class="loading-state">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+          </div>
+          <div id="reports-pagination" class="pagination"></div>
         </div>
       </div>
 
       <!-- Investors Tab -->
       <div id="tab-investors" class="tab-content">
         <div class="tab-panel">
-          <div class="filter-bar">
+          <div class="filter-bar investor-filter-bar">
             <input type="text" id="investor-search" class="search-input" placeholder="Search investors...">
-            <select id="investor-tier" class="filter-select">
-              <option value="">All Tiers</option>
-              <option value="institutional">Institutional</option>
-              <option value="large">Large</option>
-              <option value="medium">Medium</option>
-              <option value="small">Small</option>
-            </select>
+            <div class="filter-group">
+              <label class="filter-label">From</label>
+              <input type="date" id="investor-date-from" class="filter-input">
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">To</label>
+              <input type="date" id="investor-date-to" class="filter-input">
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Min Purchases</label>
+              <input type="number" id="investor-min-purchases" class="filter-input" value="2" min="1" style="width:70px;">
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Max Purchases</label>
+              <input type="number" id="investor-max-purchases" class="filter-input" placeholder="--" min="1" style="width:70px;">
+            </div>
             <select id="investor-sort" class="filter-select">
               <option value="total_purchases">Most Purchases</option>
               <option value="total_spend">Highest Spend</option>
               <option value="avg_price">Avg Price</option>
+              <option value="last_purchase">Most Recent</option>
+              <option value="neighborhoods_active">Most Neighborhoods</option>
               <option value="name">Name A-Z</option>
             </select>
           </div>
@@ -108,6 +217,21 @@
               <option value="permits">Permits</option>
               <option value="blight">Blight (Low First)</option>
             </select>
+            <select id="neighborhood-time-range" class="filter-select">
+              <option value="all">All Time</option>
+              <option value="1y" selected>Last Year</option>
+              <option value="2y">Last 2 Years</option>
+            </select>
+            <label class="filter-check-label"><input type="checkbox" id="neighborhood-show-empty"> Show Empty</label>
+            <button class="score-weights-toggle" id="score-weights-toggle-btn">Score Weights &#9660;</button>
+          </div>
+          <div class="score-weights-panel" id="score-weights-panel">
+            <div class="weight-row"><label>Sales Volume</label><input type="range" min="0" max="100" value="25" data-weight="sales_volume"><span class="weight-val">25</span></div>
+            <div class="weight-row"><label>Median Price</label><input type="range" min="0" max="100" value="25" data-weight="median_price"><span class="weight-val">25</span></div>
+            <div class="weight-row"><label>Permit Activity</label><input type="range" min="0" max="100" value="20" data-weight="permit_activity"><span class="weight-val">20</span></div>
+            <div class="weight-row"><label>Blight (inverse)</label><input type="range" min="0" max="100" value="15" data-weight="blight"><span class="weight-val">15</span></div>
+            <div class="weight-row"><label>Rentals</label><input type="range" min="0" max="100" value="10" data-weight="rentals"><span class="weight-val">10</span></div>
+            <div class="weight-row"><label>Demos (inverse)</label><input type="range" min="0" max="100" value="5" data-weight="demos"><span class="weight-val">5</span></div>
           </div>
           <div id="neighborhoods-list" class="card-list">
             <div class="loading-state">
@@ -251,6 +375,29 @@
         </svg>
         <span>Map</span>
       </button>
+      <button class="tab-btn" data-tab="search" aria-label="Search">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>Search</span>
+      </button>
+      <button class="tab-btn" data-tab="saved" aria-label="Saved">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span>Saved</span>
+      </button>
+      <button class="tab-btn" data-tab="reports" aria-label="Reports">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <span>Reports</span>
+      </button>
       <button class="tab-btn" data-tab="investors" aria-label="Investors">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -323,6 +470,7 @@
         <button class="suggestion">Who are the top investors?</button>
         <button class="suggestion">Show properties in Corktown</button>
         <button class="suggestion">What neighborhoods are growing?</button>
+        <button class="suggestion">Find a plumber near 48214</button>
       </div>
       <div id="chat-input-area">
         <input id="chat-input" type="text" placeholder="Ask about Detroit real estate..." autocomplete="off">
@@ -338,8 +486,12 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="/js/app.js"></script>
   <script src="/js/map.js"></script>
+  <script src="/js/search.js"></script>
+  <script src="/js/saved.js"></script>
+  <script src="/js/reports.js"></script>
   <script src="/js/investors.js"></script>
   <script src="/js/neighborhoods.js"></script>
   <script src="/js/contractors.js"></script>

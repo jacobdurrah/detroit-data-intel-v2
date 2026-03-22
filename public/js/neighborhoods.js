@@ -6,6 +6,16 @@
 
   var initialized = false;
   var currentView = 'list';
+  var rawNeighborhoods = [];
+  var scoreWeights = {
+    sales_volume: 25,
+    median_price: 25,
+    permit_activity: 20,
+    blight: 15,
+    rentals: 10,
+    demos: 5
+  };
+  var showEmpty = false;
 
   function init() {
     if (initialized) return;
@@ -17,8 +27,42 @@
   function bindEvents() {
     var sortEl = document.getElementById('neighborhood-sort');
     if (sortEl) {
-      sortEl.addEventListener('change', function () { loadNeighborhoods(); });
+      sortEl.addEventListener('change', function () { recalculate(); });
     }
+
+    var timeEl = document.getElementById('neighborhood-time-range');
+    if (timeEl) {
+      timeEl.addEventListener('change', function () { loadNeighborhoods(); });
+    }
+
+    var showEmptyEl = document.getElementById('neighborhood-show-empty');
+    if (showEmptyEl) {
+      showEmptyEl.addEventListener('change', function () {
+        showEmpty = this.checked;
+        recalculate();
+      });
+    }
+
+    var toggleBtn = document.getElementById('score-weights-toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function () {
+        var panel = document.getElementById('score-weights-panel');
+        if (panel) panel.classList.toggle('open');
+      });
+    }
+
+    // Weight slider listeners
+    document.querySelectorAll('#score-weights-panel input[type="range"]').forEach(function (slider) {
+      slider.addEventListener('input', function () {
+        var key = this.getAttribute('data-weight');
+        var val = parseInt(this.value);
+        this.nextElementSibling.textContent = val;
+        if (scoreWeights.hasOwnProperty(key)) {
+          scoreWeights[key] = val;
+          recalculate();
+        }
+      });
+    });
 
     document.getElementById('neighborhoods-list').addEventListener('click', function (e) {
       var card = e.target.closest('.card[data-neighborhood]');
@@ -28,25 +72,73 @@
     });
   }
 
+  function recalculate() {
+    if (!rawNeighborhoods.length) return;
+
+    var filtered = rawNeighborhoods.slice();
+
+    // Filter empty neighborhoods (< 5 total data points)
+    if (!showEmpty) {
+      filtered = filtered.filter(function (n) {
+        return ((n.sales_count || 0) + (n.permits_count || 0) + (n.blight_count || 0)) >= 5;
+      });
+    }
+
+    // Recalculate scores based on weights
+    var totalWeight = scoreWeights.sales_volume + scoreWeights.median_price +
+      scoreWeights.permit_activity + scoreWeights.blight +
+      scoreWeights.rentals + scoreWeights.demos;
+    if (totalWeight === 0) totalWeight = 1;
+
+    filtered = filtered.map(function (n) {
+      var sc = n.score_components || {};
+      var weighted =
+        (sc.sales_volume_pct || 0) * scoreWeights.sales_volume +
+        (sc.median_price_pct || 0) * scoreWeights.median_price +
+        (sc.permit_activity_pct || 0) * scoreWeights.permit_activity +
+        (1 - (sc.blight_pct || 0)) * scoreWeights.blight +
+        (sc.rental_pct || 0) * scoreWeights.rentals +
+        (1 - (sc.demo_pct || 0)) * scoreWeights.demos;
+
+      return Object.assign({}, n, { score: Math.round(weighted / totalWeight * 100) });
+    });
+
+    // Sort
+    var sortVal = (document.getElementById('neighborhood-sort') || {}).value || 'score';
+    filtered.sort(function (a, b) {
+      switch (sortVal) {
+        case 'sales': return (b.sales_count || 0) - (a.sales_count || 0);
+        case 'price': return (b.median_price || 0) - (a.median_price || 0);
+        case 'permits': return (b.permits_count || 0) - (a.permits_count || 0);
+        case 'blight': return (a.blight_count || 0) - (b.blight_count || 0);
+        default: return (b.score || 0) - (a.score || 0);
+      }
+    });
+
+    renderCards(document.getElementById('neighborhoods-list'), filtered);
+  }
+
   async function loadNeighborhoods() {
     currentView = 'list';
     var listEl = document.getElementById('neighborhoods-list');
-    var sortVal = (document.getElementById('neighborhood-sort') || {}).value || 'score';
     var filterBar = listEl.closest('.tab-panel').querySelector('.filter-bar');
     if (filterBar) filterBar.style.display = '';
+    var weightsPanel = document.getElementById('score-weights-panel');
+    if (weightsPanel) weightsPanel.style.display = '';
 
     App.showLoading(listEl);
 
     try {
-      var data = await App.api('neighborhoods', { sort: sortVal });
-      var neighborhoods = data.data || data.neighborhoods || data || [];
+      var timeRange = (document.getElementById('neighborhood-time-range') || {}).value || 'all';
+      var data = await App.api('neighborhoods', { time_range: timeRange });
+      rawNeighborhoods = data.data || data.neighborhoods || data || [];
 
-      if (!neighborhoods.length) {
+      if (!rawNeighborhoods.length) {
         App.showEmpty(listEl, 'No neighborhood data available.');
         return;
       }
 
-      renderCards(listEl, neighborhoods);
+      recalculate();
     } catch (e) {
       App.showError(listEl, 'Failed to load neighborhoods: ' + e.message, loadNeighborhoods);
     }
@@ -57,6 +149,7 @@
     neighborhoods.forEach(function (n) {
       var score = Number(n.score) || 0;
       var scoreClass = score >= 70 ? 'score-high' : score >= 40 ? 'score-mid' : 'score-low';
+      var sc = n.score_components || {};
 
       html +=
         '<div class="card card-clickable" data-neighborhood="' + App.escapeHtml(n.name || n.neighborhood || '') + '">' +
@@ -72,18 +165,45 @@
               '<div class="score-bar-fill ' + scoreClass + '" style="width:' + Math.min(100, score) + '%"></div>' +
             '</div>' +
           '</div>' +
+          renderBreakdownBar(sc) +
           '<div class="card-metrics">' +
-            '<div class="card-metric"><span class="metric-label">Sales</span><span class="metric-value">' + App.formatNumber(n.sales || n.total_sales) + '</span></div>' +
+            '<div class="card-metric"><span class="metric-label">Sales</span><span class="metric-value">' + App.formatNumber(n.sales_count || n.total_sales) + '</span></div>' +
             '<div class="card-metric"><span class="metric-label">Med. Price</span><span class="metric-value">' + App.formatCurrency(n.median_price) + '</span></div>' +
-            '<div class="card-metric"><span class="metric-label">Permits</span><span class="metric-value">' + App.formatNumber(n.permits || n.total_permits) + '</span></div>' +
-            '<div class="card-metric"><span class="metric-label">Blight</span><span class="metric-value">' + App.formatNumber(n.blight || n.blight_count) + '</span></div>' +
-            '<div class="card-metric"><span class="metric-label">Rentals</span><span class="metric-value">' + App.formatNumber(n.rentals || n.rental_count) + '</span></div>' +
-            '<div class="card-metric"><span class="metric-label">Demos</span><span class="metric-value">' + App.formatNumber(n.demos || n.demo_count) + '</span></div>' +
+            '<div class="card-metric"><span class="metric-label">Permits</span><span class="metric-value">' + App.formatNumber(n.permits_count || n.total_permits) + '</span></div>' +
+            '<div class="card-metric"><span class="metric-label">Blight</span><span class="metric-value">' + App.formatNumber(n.blight_count || n.total_blight) + '</span></div>' +
+            '<div class="card-metric"><span class="metric-label">Rentals</span><span class="metric-value">' + App.formatNumber(n.rentals_count || n.total_rentals) + '</span></div>' +
+            '<div class="card-metric"><span class="metric-label">Demos</span><span class="metric-value">' + App.formatNumber(n.demos_count || n.total_demos) + '</span></div>' +
           '</div>' +
           '<div class="card-footer">Click for full detail \u2192</div>' +
         '</div>';
     });
     container.innerHTML = html;
+  }
+
+  function renderBreakdownBar(sc) {
+    if (!sc) return '';
+    var totalWeight = scoreWeights.sales_volume + scoreWeights.median_price +
+      scoreWeights.permit_activity + scoreWeights.blight +
+      scoreWeights.rentals + scoreWeights.demos;
+    if (totalWeight === 0) return '';
+
+    var segments = [
+      { pct: (sc.sales_volume_pct || 0) * scoreWeights.sales_volume / totalWeight * 100, color: '#3b82f6' },
+      { pct: (sc.median_price_pct || 0) * scoreWeights.median_price / totalWeight * 100, color: '#10b981' },
+      { pct: (sc.permit_activity_pct || 0) * scoreWeights.permit_activity / totalWeight * 100, color: '#8b5cf6' },
+      { pct: (1 - (sc.blight_pct || 0)) * scoreWeights.blight / totalWeight * 100, color: '#ef4444' },
+      { pct: (sc.rental_pct || 0) * scoreWeights.rentals / totalWeight * 100, color: '#06b6d4' },
+      { pct: (1 - (sc.demo_pct || 0)) * scoreWeights.demos / totalWeight * 100, color: '#6b7280' }
+    ];
+
+    var html = '<div class="score-breakdown">';
+    segments.forEach(function (s) {
+      if (s.pct > 0) {
+        html += '<div class="score-breakdown-seg" style="width:' + s.pct.toFixed(1) + '%;background:' + s.color + ';"></div>';
+      }
+    });
+    html += '</div>';
+    return html;
   }
 
   async function showNeighborhoodDetail(name) {
@@ -93,6 +213,8 @@
     var listEl = document.getElementById('neighborhoods-list');
     var filterBar = listEl.closest('.tab-panel').querySelector('.filter-bar');
     if (filterBar) filterBar.style.display = 'none';
+    var weightsPanel = document.getElementById('score-weights-panel');
+    if (weightsPanel) weightsPanel.style.display = 'none';
 
     App.showLoading(listEl);
 
@@ -115,11 +237,9 @@
     var html = '<div class="detail-view">';
     html += '<button class="btn-back" onclick="NeighborhoodsModule.backToList()">\u2190 Back to neighborhoods</button>';
 
-    // Header
     html += '<div class="detail-header">';
     html += '<h2>' + App.escapeHtml(p.name || p.neighborhood || neighborhoodName) + '</h2>';
 
-    // Score bar if available
     var score = Number(p.score) || 0;
     if (score > 0) {
       var scoreClass = score >= 70 ? 'score-high' : score >= 40 ? 'score-mid' : 'score-low';
@@ -138,7 +258,6 @@
     html += '<div class="card-metric"><span class="metric-label">Blight</span><span class="metric-value">' + App.formatNumber(blight.total) + '</span></div>';
     html += '</div></div>';
 
-    // Section pills
     var encName = encodeURIComponent(neighborhoodName);
     html += '<div class="loan-filters">';
     html += '<div class="filter-pills">';
@@ -149,7 +268,6 @@
     html += '<button class="pill" onclick="NeighborhoodsModule.loadSection(\'' + encName + '\', \'trades\')">Trades (' + App.formatNumber(trades.total) + ')</button>';
     html += '</div></div>';
 
-    // Overview content
     html += '<div id="neighborhood-section-container">';
     html += renderOverview(detail);
     html += '</div>';
@@ -165,7 +283,6 @@
     var trades = detail.trades || {};
     var blight = detail.blight || {};
 
-    // Recent Sales
     if (sales.recent && sales.recent.length) {
       html += '<h3>Recent Sales</h3>';
       sales.recent.forEach(function (s) {
@@ -180,7 +297,6 @@
       });
     }
 
-    // Permit types
     if (permits.types) {
       html += '<h3>Permit Activity</h3>';
       html += '<div class="card-tags">';
@@ -190,7 +306,6 @@
       html += '</div>';
     }
 
-    // Top contractors
     if (trades.top_contractors && trades.top_contractors.length) {
       html += '<h3>Top Contractors</h3>';
       html += '<div class="detail-hoods">';
@@ -203,7 +318,6 @@
       html += '</div>';
     }
 
-    // Blight summary
     if (blight.total > 0) {
       html += '<h3>Blight Summary</h3>';
       html += '<div class="card-metrics" style="margin-bottom:12px;">';
@@ -230,7 +344,6 @@
 
   async function loadSection(encodedName, section) {
     var name = decodeURIComponent(encodedName);
-    // Update active pill
     document.querySelectorAll('.filter-pills .pill').forEach(function (p) { p.classList.remove('active'); });
     if (event && event.target) event.target.classList.add('active');
 
