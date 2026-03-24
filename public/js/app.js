@@ -9,8 +9,14 @@
   if (API_KEY) localStorage.setItem('ddi_key', API_KEY);
 
   function checkLogin() {
-    if (API_KEY) return true;
-    document.getElementById('app').innerHTML =
+    var appEl = document.getElementById('app');
+    if (API_KEY) {
+      appEl.style.display = '';
+      return true;
+    }
+    // Show login screen (app div is hidden by default)
+    appEl.style.display = '';
+    appEl.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:center;height:100vh;padding:20px;">' +
       '<div style="background:var(--surface);padding:32px;border-radius:12px;max-width:360px;width:100%;text-align:center;">' +
       '<h2 style="margin:0 0 8px;">🔒 Detroit Data Intel</h2>' +
