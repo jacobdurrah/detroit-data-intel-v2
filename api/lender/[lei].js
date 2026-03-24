@@ -1,4 +1,4 @@
-const { handleCors, sendError } = require('../_helpers');
+const { handleCors, checkAuth, sendError } = require('../_helpers');
 
 let loansData = null;
 let lendersData = null;
@@ -48,6 +48,7 @@ function expandLoan(l) {
 
 module.exports = (req, res) => {
   if (handleCors(req, res)) return;
+  if (checkAuth(req, res)) return;
   
   try {
     loadData();

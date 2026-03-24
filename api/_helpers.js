@@ -10,6 +10,26 @@ const CORS_HEADERS = {
 };
 
 /**
+ * Valid API keys for authentication
+ */
+const VALID_KEYS = new Set([
+  process.env.DDI_API_KEY || 'frameworkai',
+]);
+
+/**
+ * Check authentication. Returns true if blocked (unauthorized).
+ * Accepts ?key= query param, Authorization: Bearer header, or x-api-key header.
+ */
+function checkAuth(req, res) {
+  const key = req.query.key
+    || (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    || req.headers['x-api-key'];
+  if (VALID_KEYS.has(key)) return false; // authenticated
+  res.status(401).json({ error: 'Unauthorized. Pass ?key= or Authorization: Bearer header.' });
+  return true; // blocked
+}
+
+/**
  * Handle OPTIONS preflight and return true if handled
  */
 function handleCors(req, res) {
@@ -90,6 +110,8 @@ function filterByBounds(records, bounds) {
 
 module.exports = {
   CORS_HEADERS,
+  VALID_KEYS,
+  checkAuth,
   handleCors,
   sendPaginated,
   sendJson,

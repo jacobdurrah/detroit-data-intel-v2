@@ -4,6 +4,27 @@
 (function () {
   'use strict';
 
+  /* --- Auth --- */
+  var API_KEY = new URLSearchParams(window.location.search).get('key') || localStorage.getItem('ddi_key') || '';
+  if (API_KEY) localStorage.setItem('ddi_key', API_KEY);
+
+  function checkLogin() {
+    if (API_KEY) return true;
+    document.getElementById('app').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100vh;padding:20px;">' +
+      '<div style="background:var(--surface);padding:32px;border-radius:12px;max-width:360px;width:100%;text-align:center;">' +
+      '<h2 style="margin:0 0 8px;">🔒 Detroit Data Intel</h2>' +
+      '<p style="color:var(--muted);margin:0 0 20px;font-size:14px;">Enter your API key to access the platform.</p>' +
+      '<input id="login-key" type="password" placeholder="API key" style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;margin-bottom:12px;box-sizing:border-box;" />' +
+      '<button onclick="window.__ddiLogin()" style="width:100%;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer;">Log In</button>' +
+      '</div></div>';
+    return false;
+  }
+  window.__ddiLogin = function () {
+    var val = document.getElementById('login-key').value.trim();
+    if (val) { localStorage.setItem('ddi_key', val); API_KEY = val; location.reload(); }
+  };
+
   /* --- Global State --- */
   var state = {
     activeTab: 'map',
@@ -14,14 +35,17 @@
   /* --- API Helper --- */
   async function api(endpoint, params) {
     var url = '/api/' + endpoint;
-    if (params) {
-      var qs = Object.entries(params)
-        .filter(function (e) { return e[1] !== undefined && e[1] !== null && e[1] !== ''; })
-        .map(function (e) { return encodeURIComponent(e[0]) + '=' + encodeURIComponent(e[1]); })
-        .join('&');
-      if (qs) url += '?' + qs;
-    }
+    params = params || {};
+    params.key = API_KEY;
+    var qs = Object.entries(params)
+      .filter(function (e) { return e[1] !== undefined && e[1] !== null && e[1] !== ''; })
+      .map(function (e) { return encodeURIComponent(e[0]) + '=' + encodeURIComponent(e[1]); })
+      .join('&');
+    if (qs) url += '?' + qs;
     var res = await fetch(url);
+    if (res.status === 401) {
+      localStorage.removeItem('ddi_key'); API_KEY = ''; checkLogin(); throw new Error('Unauthorized');
+    }
     if (!res.ok) {
       var errText = await res.text().catch(function () { return 'Unknown error'; });
       throw new Error('API error ' + res.status + ': ' + errText);
@@ -267,6 +291,9 @@
 
   /* --- Init --- */
   function init() {
+    // Auth gate
+    if (!checkLogin()) return;
+
     // Tab click handlers
     $$('.tab-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {

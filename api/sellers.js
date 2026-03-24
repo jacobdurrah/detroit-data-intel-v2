@@ -1,4 +1,4 @@
-const { handleCors, sendJson, sendError, intParam } = require('./_helpers');
+const { handleCors, checkAuth, sendJson, sendError, intParam } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 /**
@@ -11,6 +11,7 @@ const { supabase } = require('./_supabase');
  */
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
+  if (checkAuth(req, res)) return;
 
   try {
     const page = intParam(req.query.page, 1);

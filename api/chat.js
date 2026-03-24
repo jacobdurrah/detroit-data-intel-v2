@@ -1,4 +1,4 @@
-const { handleCors, sendJson, sendError } = require('./_helpers');
+const { handleCors, checkAuth, sendJson, sendError } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 const SCHEMA_DESCRIPTION = `You are a Detroit real estate data analyst with access to a Supabase PostgreSQL database containing 2M+ records.
@@ -562,6 +562,7 @@ function formatClean(plan, results) {
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
+  if (checkAuth(req, res)) return;
 
   try {
     // Support both GET and POST

@@ -1,8 +1,9 @@
-const { handleCors, sendJson, sendError } = require('./_helpers');
+const { handleCors, checkAuth, sendJson, sendError } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
+  if (checkAuth(req, res)) return;
 
   if (req.method === 'POST') {
     try {

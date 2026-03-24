@@ -1,10 +1,11 @@
-const { handleCors, sendJson, sendError } = require('./_helpers');
+const { handleCors, checkAuth, sendJson, sendError } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 const LIMIT = 10;
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
+  if (checkAuth(req, res)) return;
 
   try {
     const { q, type } = req.query;

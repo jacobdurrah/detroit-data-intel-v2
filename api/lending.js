@@ -1,4 +1,4 @@
-const { handleCors, sendPaginated, sendError, intParam } = require('./_helpers');
+const { handleCors, checkAuth, sendPaginated, sendError, intParam } = require('./_helpers');
 
 let lendingData = null;
 
@@ -11,6 +11,7 @@ function loadData() {
 
 module.exports = (req, res) => {
   if (handleCors(req, res)) return;
+  if (checkAuth(req, res)) return;
 
   try {
     const data = loadData();

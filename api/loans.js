@@ -1,4 +1,4 @@
-const { handleCors, sendJson, sendError, intParam } = require('./_helpers');
+const { handleCors, checkAuth, sendJson, sendError, intParam } = require('./_helpers');
 
 let allLoans = null;
 let lenderNames = {};
@@ -34,6 +34,7 @@ function getPV(l) { return l.pv || l.property_value || null; }
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
+  if (checkAuth(req, res)) return;
 
   try {
     loadData();
