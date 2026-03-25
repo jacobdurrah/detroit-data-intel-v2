@@ -112,8 +112,19 @@
     });
   }
 
+  function showFilterUI(visible) {
+    var d = visible ? '' : 'none';
+    var els = [
+      document.querySelector('#tab-blocks .filter-bar'),
+      document.getElementById('block-weights-panel'),
+      document.getElementById('block-price-filters')
+    ];
+    els.forEach(function (el) { if (el) el.style.display = d; });
+  }
+
   function recalculate() {
     if (!rawBlocks.length) return;
+    try {
 
     var filtered = rawBlocks.slice();
 
@@ -144,12 +155,20 @@
       filtered = filtered.filter(function (b) { return (b.recent_sales || 0) > 0; });
     }
 
+    if (!filtered.length) {
+      var listEl = document.getElementById('blocks-list');
+      App.showEmpty(listEl, 'No blocks match your filters. Try adjusting price range or min sales.');
+      return;
+    }
+
     // Compute percentiles for scoring
-    var maxRecentSales = Math.max.apply(null, filtered.map(function (b) { return b.recent_sales || 0; })) || 1;
-    var maxMedianPrice = Math.max.apply(null, filtered.map(function (b) { return b.median_price || 0; })) || 1;
-    var maxInvestor = Math.max.apply(null, filtered.map(function (b) { return b.llc_buyers || 0; })) || 1;
-    var maxBlight = Math.max.apply(null, filtered.map(function (b) { return b.total_blight || 0; })) || 1;
-    var maxPermits = Math.max.apply(null, filtered.map(function (b) { return b.total_permits || 0; })) || 1;
+    var vals = function (key) { return filtered.map(function (b) { return Number(b[key]) || 0; }); };
+    var safeMax = function (arr) { var m = Math.max.apply(null, arr); return m > 0 ? m : 1; };
+    var maxRecentSales = safeMax(vals('recent_sales'));
+    var maxMedianPrice = safeMax(vals('median_price'));
+    var maxInvestor = safeMax(vals('llc_buyers'));
+    var maxBlight = safeMax(vals('total_blight'));
+    var maxPermits = safeMax(vals('total_permits'));
 
     var totalWeight = scoreWeights.recent_sales + scoreWeights.median_price +
       scoreWeights.investor_activity + scoreWeights.blight + scoreWeights.permits;
@@ -198,6 +217,10 @@
     });
 
     renderCards(document.getElementById('blocks-list'), filtered);
+    } catch (e) {
+      console.error('Blocks recalculate error:', e);
+      App.showError(document.getElementById('blocks-list'), 'Error scoring blocks: ' + e.message, recalculate);
+    }
   }
 
   async function addressLookup(query) {
@@ -239,13 +262,7 @@
   async function loadBlocks() {
     currentView = 'list';
     var listEl = document.getElementById('blocks-list');
-    var filterBar = document.querySelector('#tab-blocks .filter-bar');
-    var weightsPanel = document.getElementById('block-weights-panel');
-    var priceFilters = document.getElementById('block-price-filters');
-    if (filterBar) filterBar.style.display = '';
-    if (weightsPanel) weightsPanel.style.display = '';
-    if (priceFilters) priceFilters.style.display = '';
-
+    showFilterUI(true);
     App.showLoading(listEl);
 
     try {
@@ -254,7 +271,7 @@
         neighborhood: (document.getElementById('block-neighborhood') || {}).value || '',
         zip: (document.getElementById('block-zip') || {}).value || '',
         time_range: (document.getElementById('block-time-range') || {}).value || '1y',
-        limit: 500
+        limit: 200
       };
 
       var resp = await App.api('blocks', params);
@@ -348,12 +365,7 @@
     currentView = 'detail';
 
     var listEl = document.getElementById('blocks-list');
-    var filterBar = document.querySelector('#tab-blocks .filter-bar');
-    var weightsPanel = document.getElementById('block-weights-panel');
-    var priceFilters = document.getElementById('block-price-filters');
-    if (filterBar) filterBar.style.display = 'none';
-    if (weightsPanel) weightsPanel.style.display = 'none';
-    if (priceFilters) priceFilters.style.display = 'none';
+    showFilterUI(false);
 
     if (!skipHash && App.setHashRoute) {
       App.setHashRoute('blocks', streetId);
@@ -557,12 +569,7 @@
     // Re-render from cache instead of re-fetching
     if (rawBlocks.length) {
       var listEl = document.getElementById('blocks-list');
-      var filterBar = document.querySelector('#tab-blocks .filter-bar');
-      var weightsPanel = document.getElementById('block-weights-panel');
-      var priceFilters = document.getElementById('block-price-filters');
-      if (filterBar) filterBar.style.display = '';
-      if (weightsPanel) weightsPanel.style.display = '';
-      if (priceFilters) priceFilters.style.display = '';
+      showFilterUI(true);
       recalculate();
       if (savedScrollY > 0) {
         setTimeout(function () { window.scrollTo(0, savedScrollY); savedScrollY = 0; }, 50);
