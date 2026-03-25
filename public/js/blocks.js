@@ -31,7 +31,23 @@
   function bindEvents() {
     var searchEl = document.getElementById('block-search');
     if (searchEl) {
-      searchEl.addEventListener('input', App.debounce(function () { loadBlocks(); }, 300));
+      searchEl.addEventListener('input', App.debounce(function () {
+        var val = searchEl.value.trim();
+        // If it looks like an address (starts with a number), do address lookup
+        if (/^\d+\s+\w/.test(val)) {
+          addressLookup(val);
+        } else {
+          loadBlocks();
+        }
+      }, 400));
+      searchEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          var val = searchEl.value.trim();
+          if (/^\d+\s+\w/.test(val)) {
+            addressLookup(val);
+          }
+        }
+      });
     }
 
     var neighborhoodEl = document.getElementById('block-neighborhood');
@@ -182,6 +198,42 @@
     });
 
     renderCards(document.getElementById('blocks-list'), filtered);
+  }
+
+  async function addressLookup(query) {
+    var listEl = document.getElementById('blocks-list');
+    App.showLoading(listEl);
+
+    try {
+      var resp = await App.api('address-lookup', { q: query });
+      var results = resp.data || [];
+
+      if (results.length === 0) {
+        App.showEmpty(listEl, 'No block found for "' + App.escapeHtml(query) + '". Try a street name instead.');
+        return;
+      }
+
+      if (results.length === 1) {
+        // Direct jump to block detail
+        showBlockDetail(results[0].street_id);
+        return;
+      }
+
+      // Multiple matches — show picker
+      var html = '<div style="padding:12px;color:var(--text-muted);font-size:13px;">Found ' + results.length + ' blocks matching "' + App.escapeHtml(query) + '":</div>';
+      results.forEach(function (r) {
+        html += '<div class="card card-clickable" data-street-id="' + r.street_id + '" style="cursor:pointer;">';
+        html += '<div class="card-header"><span class="card-title">' + App.escapeHtml(r.full_street_name || 'Unknown') + ' (' + App.escapeHtml(r.address_range || '') + ')</span></div>';
+        html += '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">';
+        if (r.neighborhood) html += '<span class="reason-tag">' + App.escapeHtml(r.neighborhood) + '</span> ';
+        if (r.zip_code) html += 'ZIP ' + App.escapeHtml(r.zip_code);
+        if (r.matched_address) html += ' &middot; Matched: ' + App.escapeHtml(r.matched_address);
+        html += '</div></div>';
+      });
+      listEl.innerHTML = html;
+    } catch (e) {
+      App.showError(listEl, 'Address lookup failed: ' + e.message);
+    }
   }
 
   async function loadBlocks() {
