@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
 
     // 3. Get sales history for this block
     const { data: sales } = await supabase.from('sales')
-      .select('sales_id, address, sale_date, sale_price, grantor, grantee, terms_of_sale, property_class_description, neighborhood, latitude, longitude')
+      .select('sales_id, address, sale_date, sale_price, grantor, grantee, terms_of_sale, property_class_desc, neighborhood, latitude, longitude')
       .eq('street_id', streetId)
       .order('sale_date', { ascending: false })
       .limit(200);
