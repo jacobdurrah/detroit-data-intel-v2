@@ -123,13 +123,15 @@
     btn.textContent = 'Sending...';
 
     try {
-      var resp = await fetch('/api/feedback', {
+      var apiKey = window.App && window.App.state && window.App.state.apiKey || sessionStorage.getItem('ddi_key') || localStorage.getItem('ddi_key') || '';
+      var resp = await fetch('/api/feedback?key=' + encodeURIComponent(apiKey), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           page: targetInfo.page || getCurrentTab(),
           element: targetInfo.id || targetInfo.tag || null,
           feedback: '[' + feedbackType + '] ' + text + (targetInfo.text ? '\n\nElement text: ' + targetInfo.text.substring(0, 200) : ''),
+          type: feedbackType,
           timestamp: new Date().toISOString(),
         }),
       });
