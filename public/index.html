@@ -246,22 +246,50 @@
       <!-- Blocks Tab -->
       <div id="tab-blocks" class="tab-content">
         <div class="tab-panel">
-          <div class="filter-bar">
+          <div class="filter-bar" style="flex-wrap:wrap;gap:8px;">
             <input type="text" id="block-search" class="search-input" placeholder="Search streets...">
             <select id="block-neighborhood" class="filter-select">
               <option value="">All Neighborhoods</option>
             </select>
             <input type="text" id="block-zip" class="filter-input" placeholder="ZIP" style="width:80px;">
-            <div class="filter-group">
-              <label class="filter-label">Min Sales</label>
-              <input type="number" id="block-min-sales" class="filter-input" value="1" min="0" style="width:70px;">
-            </div>
             <select id="block-sort" class="filter-select">
+              <option value="score">Score</option>
               <option value="recent_sales">Recent Sales</option>
               <option value="total_sales">Total Sales</option>
+              <option value="median_price">Median Price</option>
               <option value="avg_price">Avg Price</option>
-              <option value="block_score">Block Score</option>
+              <option value="investors">Investors</option>
+              <option value="blight">Blight (Low First)</option>
             </select>
+            <select id="block-time-range" class="filter-select">
+              <option value="all">All Time</option>
+              <option value="6m">Last 6 Months</option>
+              <option value="1y" selected>Last Year</option>
+              <option value="2y">Last 2 Years</option>
+            </select>
+            <label class="filter-check-label"><input type="checkbox" id="block-show-empty"> Show Empty</label>
+            <button class="score-weights-toggle" id="block-weights-toggle-btn">Score Weights &#9660;</button>
+          </div>
+          <div class="score-weights-panel" id="block-weights-panel">
+            <div class="weight-row"><label>Recent Sales</label><input type="range" min="0" max="100" value="30" data-weight="recent_sales"><span class="weight-val">30</span></div>
+            <div class="weight-row"><label>Median Price</label><input type="range" min="0" max="100" value="25" data-weight="median_price"><span class="weight-val">25</span></div>
+            <div class="weight-row"><label>Investor Activity</label><input type="range" min="0" max="100" value="20" data-weight="investor_activity"><span class="weight-val">20</span></div>
+            <div class="weight-row"><label>Blight (inverse)</label><input type="range" min="0" max="100" value="15" data-weight="blight"><span class="weight-val">15</span></div>
+            <div class="weight-row"><label>Permits</label><input type="range" min="0" max="100" value="10" data-weight="permits"><span class="weight-val">10</span></div>
+          </div>
+          <div id="block-price-filters" style="display:flex;gap:8px;padding:0 12px 8px;flex-wrap:wrap;">
+            <div class="filter-group">
+              <label class="filter-label">Min Avg Price</label>
+              <input type="number" id="block-min-price" class="filter-input" placeholder="$0" style="width:100px;">
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Max Avg Price</label>
+              <input type="number" id="block-max-price" class="filter-input" placeholder="No max" style="width:100px;">
+            </div>
+            <div class="filter-group">
+              <label class="filter-label">Min Recent Sales</label>
+              <input type="number" id="block-min-sales" class="filter-input" value="0" min="0" style="width:70px;">
+            </div>
           </div>
           <div id="blocks-list" class="card-list">
             <div class="loading-state">
@@ -270,7 +298,6 @@
               <div class="skeleton-card"></div>
             </div>
           </div>
-          <div id="blocks-pagination" class="pagination"></div>
         </div>
       </div>
 
