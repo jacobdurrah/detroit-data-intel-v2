@@ -247,6 +247,9 @@
       case 'neighborhoods':
         if (window.NeighborhoodsModule) window.NeighborhoodsModule.init();
         break;
+      case 'blocks':
+        if (window.BlocksModule) window.BlocksModule.init();
+        break;
       case 'contractors':
         if (window.ContractorsModule) window.ContractorsModule.init();
         break;

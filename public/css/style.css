@@ -2409,3 +2409,53 @@ a {
 .score-high { color: #10b981; }
 .score-mid { color: #f59e0b; }
 .score-low { color: #ef4444; }
+
+/* --- Blocks Module --- */
+.block-score-badge {
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.block-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+@media (min-width: 480px) {
+  .block-metrics {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.block-metric {
+  text-align: center;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+}
+.block-metric .metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  display: block;
+}
+.block-metric .metric-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  display: block;
+}
+.block-section { margin-top: 16px; }
+.block-section-header {
+  font-size: 15px;
+  color: var(--accent);
+  padding: 10px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#block-detail-map { z-index: 1; }
