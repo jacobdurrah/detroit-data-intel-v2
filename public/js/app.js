@@ -202,9 +202,48 @@
     return btn;
   }
 
+  /* --- URL Hash Router --- */
+  // Hash format: #tab or #tab/detail-id or #tab?param=val&param=val
+  // Examples: #blocks, #blocks/18104, #investors/ACME%20LLC, #blocks?search=Cameron&page=2
+
+  function getHashRoute() {
+    var hash = (window.location.hash || '').replace(/^#\/?/, '');
+    if (!hash) return { tab: 'map', id: null, params: {} };
+    var parts = hash.split('?');
+    var pathParts = parts[0].split('/');
+    var tab = pathParts[0] || 'map';
+    var id = pathParts.slice(1).map(decodeURIComponent).join('/') || null;
+    var params = {};
+    if (parts[1]) {
+      new URLSearchParams(parts[1]).forEach(function (v, k) { params[k] = v; });
+    }
+    return { tab: tab, id: id, params: params };
+  }
+
+  function setHashRoute(tab, id, params, replace) {
+    var hash = '#' + tab;
+    if (id) hash += '/' + encodeURIComponent(id);
+    if (params && Object.keys(params).length) {
+      var qs = Object.entries(params)
+        .filter(function (e) { return e[1] !== undefined && e[1] !== null && e[1] !== ''; })
+        .map(function (e) { return encodeURIComponent(e[0]) + '=' + encodeURIComponent(e[1]); })
+        .join('&');
+      if (qs) hash += '?' + qs;
+    }
+    if (replace) {
+      history.replaceState(null, '', hash);
+    } else {
+      history.pushState(null, '', hash);
+    }
+  }
+
   /* --- Tab Routing --- */
-  function switchTab(tabName) {
-    if (state.activeTab === tabName) return;
+  function switchTab(tabName, opts) {
+    opts = opts || {};
+    var skipHash = opts.skipHash || false;
+    var forceReload = opts.forceReload || false;
+
+    if (state.activeTab === tabName && !forceReload) return;
     state.activeTab = tabName;
 
     $$('.tab-content').forEach(function (el) { el.classList.remove('active'); });
@@ -224,6 +263,11 @@
     // Re-invalidate map size when switching back
     if (tabName === 'map' && window.MapModule && window.MapModule.invalidateSize) {
       window.MapModule.invalidateSize();
+    }
+
+    // Update URL hash (unless suppressed by popstate handler)
+    if (!skipHash) {
+      setHashRoute(tabName, null, null, false);
     }
   }
 
@@ -298,6 +342,52 @@
     });
   }
 
+  /* --- Route Handler --- */
+  function handleRoute(route, isPopState) {
+    var tab = route.tab || 'map';
+    var id = route.id;
+
+    // Switch to tab (skipHash if coming from popstate or initial load)
+    switchTab(tab, { skipHash: true, forceReload: !!isPopState });
+
+    // Route to detail views based on tab + id
+    if (id) {
+      setTimeout(function () {
+        switch (tab) {
+          case 'blocks':
+            if (window.BlocksModule && window.BlocksModule.showBlockDetail) {
+              window.BlocksModule.showBlockDetail(id);
+            }
+            break;
+          case 'investors':
+            if (window.InvestorsModule && window.InvestorsModule.showDetail) {
+              window.InvestorsModule.showDetail(id);
+            }
+            break;
+          case 'neighborhoods':
+            if (window.NeighborhoodsModule && window.NeighborhoodsModule.showDetail) {
+              window.NeighborhoodsModule.showDetail(id);
+            }
+            break;
+        }
+      }, 100);
+    } else if (isPopState) {
+      // Going back to list view — restore list
+      switch (tab) {
+        case 'blocks':
+          if (window.BlocksModule && window.BlocksModule.backToList) {
+            window.BlocksModule.backToList(true); // true = preserve page
+          }
+          break;
+        case 'investors':
+          if (window.InvestorsModule && window.InvestorsModule.backToList) {
+            window.InvestorsModule.backToList();
+          }
+          break;
+      }
+    }
+  }
+
   /* --- Init --- */
   function init() {
     // Auth gate
@@ -313,9 +403,35 @@
     // Load stats
     loadStats();
 
-    // Init map right away (it's the default tab)
-    state.loadedTabs['map'] = true;
-    if (window.MapModule) window.MapModule.init();
+    // Read initial route from hash
+    var route = getHashRoute();
+    var startTab = route.tab || 'map';
+
+    // Init map if it's the default (or if hash says map)
+    state.loadedTabs[startTab] = true;
+    if (startTab === 'map') {
+      if (window.MapModule) window.MapModule.init();
+    }
+
+    // Handle initial route
+    handleRoute(route, false);
+
+    // Update hash if none set
+    if (!window.location.hash) {
+      setHashRoute(startTab, null, null, true);
+    }
+
+    // Listen for browser back/forward
+    window.addEventListener('popstate', function () {
+      var r = getHashRoute();
+      handleRoute(r, true);
+    });
+
+    // Also handle hashchange for direct URL changes
+    window.addEventListener('hashchange', function () {
+      var r = getHashRoute();
+      handleRoute(r, true);
+    });
 
     // Init chat
     if (window.ChatModule) window.ChatModule.init();
@@ -340,7 +456,9 @@
     showEmpty: showEmpty,
     escapeHtml: escapeHtml,
     renderPagination: renderPagination,
-    switchTab: switchTab
+    switchTab: switchTab,
+    setHashRoute: setHashRoute,
+    getHashRoute: getHashRoute
   };
 
 })();

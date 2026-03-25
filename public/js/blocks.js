@@ -12,6 +12,7 @@
   var currentView = 'list';
   var cachedDetail = null;
   var blockDetailMap = null;
+  var savedScrollY = 0;
 
   function init() {
     if (initialized) return;
@@ -46,6 +47,7 @@
     document.getElementById('blocks-list').addEventListener('click', function (e) {
       var card = e.target.closest('.card[data-street-id]');
       if (card) {
+        savedScrollY = window.scrollY;
         showBlockDetail(card.getAttribute('data-street-id'));
       }
     });
@@ -94,6 +96,11 @@
         loadBlocks();
       });
 
+      // Restore scroll position if returning from detail
+      if (savedScrollY > 0) {
+        setTimeout(function () { window.scrollTo(0, savedScrollY); savedScrollY = 0; }, 50);
+      }
+
       var start = (currentPage - 1) * PAGE_SIZE + 1;
       var end = Math.min(currentPage * PAGE_SIZE, total);
       var infoEl = document.createElement('span');
@@ -138,7 +145,7 @@
     container.innerHTML = html;
   }
 
-  async function showBlockDetail(streetId) {
+  async function showBlockDetail(streetId, skipHash) {
     if (!streetId) return;
     currentView = 'detail';
 
@@ -148,6 +155,11 @@
 
     var filterBar = listEl.closest('.tab-panel').querySelector('.filter-bar');
     if (filterBar) filterBar.style.display = 'none';
+
+    // Push URL state for deep linking
+    if (!skipHash && App.setHashRoute) {
+      App.setHashRoute('blocks', streetId);
+    }
 
     App.showLoading(listEl);
 
@@ -389,11 +401,19 @@
     if (arrow) arrow.textContent = isHidden ? '\u25BC' : '\u25B6';
   }
 
-  function backToList() {
+  function backToList(preservePage) {
     currentView = 'list';
-    currentPage = 1;
+    if (!preservePage) {
+      // Don't reset page — keep where the user was
+    }
     cachedDetail = null;
     blockDetailMap = null;
+
+    // Update URL to list view
+    if (App.setHashRoute) {
+      App.setHashRoute('blocks', null, null, true);
+    }
+
     loadBlocks();
   }
 
