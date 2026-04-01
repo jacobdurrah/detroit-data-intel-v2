@@ -1,17 +1,17 @@
 {
-  "last_check": "2026-03-18T14:10:24.167024",
+  "last_check": "2026-04-01T14:11:10.943136",
   "tables": {
-    "sales": 505852,
-    "blight": 872697,
-    "permits": 43830,
-    "trades": 112096,
+    "sales": 506336,
+    "blight": 876096,
+    "permits": 44074,
+    "trades": 112760,
     "assessment": 388147,
-    "dlba_owned": 59310,
-    "dlba_auction": 5418,
-    "demos": 16089,
-    "rentals": 38179,
-    "presale": 15060,
-    "vacant": 1417
+    "dlba_owned": 59167,
+    "dlba_auction": 5431,
+    "demos": 16117,
+    "rentals": 38637,
+    "presale": 15117,
+    "vacant": 1374
   },
-  "total_rows": 2058095
+  "total_rows": 2063256
 }
