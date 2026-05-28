@@ -40,6 +40,45 @@ RULES:
 - For permits in a neighborhood, filter by neighborhood column
 - RESPOND WITH ONLY THE JSON OBJECT. No markdown, no explanation, no code blocks.`;
 
+const MAX_CHAT_QUERY_LIMIT = 1000;
+const ALLOWED_CHAT_COLUMNS = {
+  sales: ['sales_id', 'address', 'sale_date', 'sale_price', 'grantor', 'grantee', 'neighborhood', 'parcel_id', 'zip_code', 'terms_of_sale', 'property_class_desc'],
+  blight: ['ticket_id', 'violator_name', 'street_number', 'street_name', 'violation_description', 'fine_amount', 'judgment_amount', 'balance_due', 'payment_status', 'neighborhood', 'ticket_issued_date', 'violation_date'],
+  assessment: ['parcel_id', 'address', 'property_class', 'tax_status', 'total_assessed_value', 'total_taxable_value', 'land_value', 'improvement_value', 'year_built', 'bedrooms', 'full_baths', 'owner_name', 'neighborhood', 'zip_code'],
+  permits: ['permit_no', 'address', 'permit_issued', 'permit_type', 'description', 'estimated_cost', 'contractor_name', 'parcel_id', 'neighborhood'],
+  trades: ['permit_no', 'address', 'permit_issued', 'permit_type', 'description', 'contractor_name', 'parcel_id', 'neighborhood'],
+  rentals: ['certificate_number', 'address', 'parcel_id', 'rental_type', 'owner_name', 'neighborhood'],
+  dlba_owned: ['parcel_id', 'address', 'neighborhood', 'property_class'],
+  dlba_auction: ['object_id', 'address', 'sale_date', 'sale_price', 'buyer', 'parcel_id', 'neighborhood'],
+  presale: ['case_id', 'address', 'status', 'rating', 'parcel_id', 'neighborhood'],
+  demos: ['permit_no', 'address', 'permit_issued', 'contractor_name', 'parcel_id', 'neighborhood', 'permit_status'],
+  vacant: ['task_id', 'address', 'date_issued', 'owner_name', 'parcel_id', 'neighborhood'],
+  contractor_directory: ['id', 'name', 'specialties', 'permit_types', 'total_permits', 'recent_permits', 'neighborhoods', 'zip_codes', 'phone', 'website', 'rating', 'sample_descriptions', 'last_permit_date'],
+};
+const ALLOWED_FILTER_OPS = new Set(['ilike', 'eq', 'gt', 'lt', 'gte', 'lte']);
+
+function sanitizeSelect(selectCols, allowedColumns) {
+  const requested = (selectCols || '')
+    .replace(/,?\s*COUNT\([^)]*\)\s*(?:as\s+\w+)?/gi, '')
+    .replace(/,\s*$/, '')
+    .split(',')
+    .map(col => col.trim())
+    .filter(Boolean);
+
+  if (requested.length === 0 || requested.includes('*')) {
+    return allowedColumns.join(', ');
+  }
+
+  const safeColumns = requested.filter(col => /^[a-z_][a-z0-9_]*$/i.test(col) && allowedColumns.includes(col));
+  return safeColumns.length > 0 ? safeColumns.join(', ') : allowedColumns.join(', ');
+}
+
+function sanitizeLimit(limit) {
+  const parsed = Number.parseInt(limit, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 20;
+  return Math.min(parsed, MAX_CHAT_QUERY_LIMIT);
+}
+
 async function classifyWithAI(question) {
   // Try keyword classification first — it's fast and handles common patterns well
   const keywordResult = classifyKeyword(question);
@@ -326,11 +365,16 @@ async function executeQueryPlan(plan) {
     }
 
     try {
-      // Clean select: remove SQL aggregates that Supabase JS can't handle
-      let selectCols = (q.select || '*').replace(/,?\s*COUNT\([^)]*\)\s*(?:as\s+\w+)?/gi, '').replace(/,\s*$/, '').trim();
-      if (!selectCols) selectCols = '*';
+      const allowedColumns = ALLOWED_CHAT_COLUMNS[q.table];
+      if (!allowedColumns) {
+        console.warn(`Skipping disallowed chat table: ${q.table}`);
+        continue;
+      }
+
+      const selectCols = sanitizeSelect(q.select, allowedColumns);
       let query = supabase.from(q.table).select(selectCols);
       for (const f of (q.filters || [])) {
+        if (!ALLOWED_FILTER_OPS.has(f.op) || !allowedColumns.includes(f.column)) continue;
         switch (f.op) {
           case 'ilike': query = query.ilike(f.column, f.value); break;
           case 'eq': query = query.eq(f.column, f.value); break;
@@ -340,8 +384,8 @@ async function executeQueryPlan(plan) {
           case 'lte': query = query.lte(f.column, f.value); break;
         }
       }
-      if (q.order) query = query.order(q.order.column, { ascending: q.order.ascending ?? false });
-      const requestedLimit = q.limit || 20;
+      if (q.order && allowedColumns.includes(q.order.column)) query = query.order(q.order.column, { ascending: q.order.ascending ?? false });
+      const requestedLimit = sanitizeLimit(q.limit);
       const pageSize = Math.min(requestedLimit, 1000);
       let allData = [];
 
