@@ -12,7 +12,10 @@ const fs = require('fs');
 const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co';
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+if (!SERVICE_KEY) {
+  throw new Error('SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY is required');
+}
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 // Use ET date so report date matches Jacob's local time
 const TODAY = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Detroit' })).toISOString().slice(0, 10);
@@ -422,7 +425,7 @@ async function updateMedians() {
   var page = 0;
   var hasMore = true;
   while (hasMore && page < 20) {
-    var { data: batch } = await supabase.from('sales').select('neighborhood, sale_price, zip')
+    var { data: batch } = await supabase.from('sales').select('neighborhood, sale_price, zip_code')
       .gte('sale_date', cutoff).gt('sale_price', 10000)
       .range(page * 1000, (page + 1) * 1000 - 1);
     if (batch && batch.length > 0) { allSales = allSales.concat(batch); hasMore = batch.length === 1000; page++; }
@@ -433,9 +436,9 @@ async function updateMedians() {
   var zipSales = {};
   allSales.forEach(s => {
     var price = Number(s.sale_price);
-    if (price > 0 && s.zip) {
-      if (!zipSales[s.zip]) zipSales[s.zip] = [];
-      zipSales[s.zip].push(price);
+    if (price > 0 && s.zip_code) {
+      if (!zipSales[s.zip_code]) zipSales[s.zip_code] = [];
+      zipSales[s.zip_code].push(price);
     }
   });
   
@@ -612,6 +615,7 @@ async function run() {
   
   // 10. Store in Supabase
   // Store each property in property_searches
+  var storeErrors = [];
   for (var j = 0; j < report.properties.length; j++) {
     var prop = report.properties[j];
     var row = {
@@ -639,7 +643,13 @@ async function run() {
     
     var { error } = await supabase.from('property_searches')
       .upsert(row, { onConflict: 'address,search_date', ignoreDuplicates: true });
-    if (error) console.log('  Store error for ' + prop.address + ': ' + error.message);
+    if (error) {
+      console.log('  Store error for ' + prop.address + ': ' + error.message);
+      storeErrors.push(prop.address + ': ' + error.message);
+    }
+  }
+  if (storeErrors.length) {
+    throw new Error('Failed to store ' + storeErrors.length + ' property search row(s); seen addresses were not saved');
   }
   
   // Store the full report as a property_report
@@ -650,7 +660,9 @@ async function run() {
     summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
     report_data: report,
   });
-  if (reportError) console.log('Report store error: ' + reportError.message);
+  if (reportError) {
+    throw new Error('Report store error: ' + reportError.message + '; seen addresses were not saved');
+  }
   
   // Persist the seen hashmap (all 1000 listings marked seen at step 2)
   saveSeenAddresses(seenMap);

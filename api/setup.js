@@ -4,13 +4,23 @@ module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
-    return sendError(res, 'POST with { db_url } required', 405);
+    return sendError(res, 'POST required', 405);
   }
 
-  var body = req.body || {};
-  var dbUrl = body.db_url || process.env.DATABASE_URL;
+  var setupSecret = process.env.SETUP_SECRET;
+  if (!setupSecret) {
+    return sendError(res, 'Setup endpoint is disabled', 404);
+  }
+
+  var auth = req.headers.authorization || '';
+  var token = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : req.headers['x-setup-secret'];
+  if (token !== setupSecret) {
+    return sendError(res, 'Unauthorized', 401);
+  }
+
+  var dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
-    return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
+    return sendError(res, 'DATABASE_URL is required', 500);
   }
 
   try {
