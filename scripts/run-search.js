@@ -504,10 +504,6 @@ async function run() {
   var newListings = allListings.filter(l => !seenMap[l.address]);
   console.log('Seen: ' + seenCount + ' | New: ' + newListings.length + ' of ' + allListings.length);
   
-  // Mark ALL fetched listings as seen NOW (even outside target/price — never re-check)
-  var now = Date.now();
-  allListings.forEach(l => { seenMap[l.address] = now; });
-  
   // 3. Filter new listings to target neighborhoods
   var inTarget = newListings.filter(l => TARGET_ZIPS.has(l.zip));
   console.log('In target neighborhoods: ' + inTarget.length);
@@ -612,6 +608,7 @@ async function run() {
   
   // 10. Store in Supabase
   // Store each property in property_searches
+  var storeErrors = [];
   for (var j = 0; j < report.properties.length; j++) {
     var prop = report.properties[j];
     var row = {
@@ -639,7 +636,10 @@ async function run() {
     
     var { error } = await supabase.from('property_searches')
       .upsert(row, { onConflict: 'address,search_date', ignoreDuplicates: true });
-    if (error) console.log('  Store error for ' + prop.address + ': ' + error.message);
+    if (error) {
+      console.log('  Store error for ' + prop.address + ': ' + error.message);
+      storeErrors.push(prop.address + ': ' + error.message);
+    }
   }
   
   // Store the full report as a property_report
@@ -650,9 +650,19 @@ async function run() {
     summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
     report_data: report,
   });
-  if (reportError) console.log('Report store error: ' + reportError.message);
-  
-  // Persist the seen hashmap (all 1000 listings marked seen at step 2)
+  if (reportError) {
+    console.log('Report store error: ' + reportError.message);
+    storeErrors.push('daily report: ' + reportError.message);
+  }
+
+  if (storeErrors.length) {
+    console.error('Persistence failed; not saving seen addresses. Listings will be retried on the next run.');
+    throw new Error('Supabase persistence failed for ' + storeErrors.length + ' write(s)');
+  }
+
+  // Persist the seen hashmap only after Supabase writes succeed.
+  var now = Date.now();
+  allListings.forEach(l => { seenMap[l.address] = now; });
   saveSeenAddresses(seenMap);
   console.log('Seen addresses saved: ' + Object.keys(seenMap).length + ' total');
   
