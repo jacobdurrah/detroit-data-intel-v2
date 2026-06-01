@@ -1,10 +1,29 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
+const crypto = require('crypto');
+
+function isAuthorized(req) {
+  const token = process.env.SETUP_TOKEN;
+  if (!token) return false;
+
+  const auth = req.headers.authorization || '';
+  const submitted = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : '';
+  if (!submitted) return false;
+
+  const expectedBuf = Buffer.from(token);
+  const submittedBuf = Buffer.from(submitted);
+  return expectedBuf.length === submittedBuf.length &&
+    crypto.timingSafeEqual(expectedBuf, submittedBuf);
+}
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
     return sendError(res, 'POST with { db_url } required', 405);
+  }
+
+  if (!isAuthorized(req)) {
+    return sendError(res, 'Not found', 404);
   }
 
   var body = req.body || {};
