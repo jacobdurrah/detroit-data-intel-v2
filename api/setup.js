@@ -1,16 +1,44 @@
+const crypto = require('crypto');
 const { handleCors, sendJson, sendError } = require('./_helpers');
+
+function getHeader(req, name) {
+  if (!req.headers) return '';
+  return req.headers[name] || req.headers[name.toLowerCase()] || '';
+}
+
+function authorized(req) {
+  var expected = process.env.SETUP_API_SECRET || '';
+  var provided = getHeader(req, 'x-setup-secret');
+  var auth = getHeader(req, 'authorization');
+
+  if (!provided && auth && auth.indexOf('Bearer ') === 0) {
+    provided = auth.slice('Bearer '.length);
+  }
+  if (!expected || !provided || expected.length !== provided.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+}
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
-  if (req.method !== 'POST') {
-    return sendError(res, 'POST with { db_url } required', 405);
+  if (process.env.SETUP_API_ENABLED !== 'true' || !process.env.SETUP_API_SECRET) {
+    return sendError(res, 'Not found', 404);
   }
 
-  var body = req.body || {};
-  var dbUrl = body.db_url || process.env.DATABASE_URL;
+  if (!authorized(req)) {
+    return sendError(res, 'Forbidden', 403);
+  }
+
+  if (req.method !== 'POST') {
+    return sendError(res, 'POST required', 405);
+  }
+
+  var dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
-    return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
+    return sendError(res, 'DATABASE_URL is required', 400);
   }
 
   try {
