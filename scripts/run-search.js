@@ -7,13 +7,22 @@
  * Cron: daily at 7:30 AM ET
  */
 
-const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co';
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY;
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+let supabaseClient;
+function getSupabase() {
+  if (!supabaseClient) {
+    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+    if (!serviceKey) {
+      throw new Error('SUPABASE_SERVICE_KEY is required to store search reports');
+    }
+    const { createClient } = require('@supabase/supabase-js');
+    supabaseClient = createClient(SUPABASE_URL, serviceKey);
+  }
+  return supabaseClient;
+}
 // Use ET date so report date matches Jacob's local time
 const TODAY = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Detroit' })).toISOString().slice(0, 10);
 
@@ -40,6 +49,16 @@ function saveSeenAddresses(map) {
   var dir = path.dirname(SEEN_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(SEEN_FILE, JSON.stringify(map, null, 0));
+}
+
+function filterUnseenListings(listings, seenMap) {
+  return listings.filter(l => !seenMap[l.address]);
+}
+
+function markSeenListings(seenMap, listings, timestamp) {
+  var seenAt = timestamp || Date.now();
+  listings.forEach(l => { seenMap[l.address] = seenAt; });
+  return seenMap;
 }
 
 function v(obj) { return obj && typeof obj === 'object' && 'value' in obj ? obj.value : obj; }
@@ -370,7 +389,7 @@ function analyzeListing(listing, feedback) {
 /* ---- Feedback Learning ---- */
 
 async function learnFromFeedback() {
-  var { data: feedback } = await supabase
+  var { data: feedback } = await getSupabase()
     .from('search_feedback')
     .select('feedback, reason, search_id, user_name, property_searches(list_price, neighborhood, zip)')
     .order('created_at', { ascending: false })
@@ -422,7 +441,7 @@ async function updateMedians() {
   var page = 0;
   var hasMore = true;
   while (hasMore && page < 20) {
-    var { data: batch } = await supabase.from('sales').select('neighborhood, sale_price, zip')
+    var { data: batch } = await getSupabase().from('sales').select('neighborhood, sale_price, zip')
       .gte('sale_date', cutoff).gt('sale_price', 10000)
       .range(page * 1000, (page + 1) * 1000 - 1);
     if (batch && batch.length > 0) { allSales = allSales.concat(batch); hasMore = batch.length === 1000; page++; }
@@ -473,7 +492,7 @@ async function checkPermits(addresses) {
     // Try matching by street number + street name
     for (var addr of batch) {
       var parts = addr.split(',')[0].trim(); // Just the street address
-      var { data } = await supabase.from('permits')
+      var { data } = await getSupabase().from('permits')
         .select('permit_type, description, status')
         .ilike('address', '%' + parts + '%')
         .limit(5);
@@ -489,10 +508,67 @@ async function checkPermits(addresses) {
   return permits;
 }
 
+async function storeReport(report, client) {
+  var db = client || getSupabase();
+  var errors = [];
+
+  for (var j = 0; j < report.properties.length; j++) {
+    var prop = report.properties[j];
+    var row = {
+      search_date: TODAY,
+      address: prop.address,
+      zip: prop.zip,
+      neighborhood: prop.neighborhood,
+      list_price: prop.list_price,
+      beds: prop.beds,
+      baths: prop.baths,
+      sqft: prop.sqft,
+      year_built: prop.year_built,
+      lot_size: prop.lot_size ? String(prop.lot_size) : null,
+      listing_url: prop.listing_url,
+      photo_urls: prop.photo_url ? [prop.photo_url] : [],
+      description_raw: prop.description,
+      source: 'redfin',
+      score: prop.score,
+      score_breakdown: prop.score_breakdown,
+      highlights: prop.mechanicals,
+      status: 'new',
+      property_type: 'single_family',
+      estimated_arv: prop.estimated_arv,
+    };
+
+    var { error } = await db.from('property_searches')
+      .upsert(row, { onConflict: 'address,search_date', ignoreDuplicates: true });
+    if (error) {
+      var message = 'Store error for ' + prop.address + ': ' + error.message;
+      console.log('  ' + message);
+      errors.push(message);
+    }
+  }
+
+  var { error: reportError } = await db.from('property_reports').insert({
+    address: 'DAILY_REPORT_' + TODAY,
+    report_type: 'dd',
+    score: report.properties.length > 0 ? report.properties[0].score : 0,
+    summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
+    report_data: report,
+  });
+  if (reportError) {
+    var reportMessage = 'Report store error: ' + reportError.message;
+    console.log(reportMessage);
+    errors.push(reportMessage);
+  }
+
+  if (errors.length > 0) {
+    throw new Error('Failed to store search report: ' + errors.join('; '));
+  }
+}
+
 /* ---- Main Pipeline ---- */
 
 async function run() {
   console.log('=== Dusty Turnkey Intelligence Report — ' + TODAY + ' ===\n');
+  getSupabase();
   
   // 1. Fetch all listings
   var allListings = await fetchRedfin();
@@ -501,12 +577,8 @@ async function run() {
   // 2. Dedup FIRST — skip everything we've already seen (O(1) hashmap)
   var seenMap = loadSeenAddresses();
   var seenCount = Object.keys(seenMap).length;
-  var newListings = allListings.filter(l => !seenMap[l.address]);
+  var newListings = filterUnseenListings(allListings, seenMap);
   console.log('Seen: ' + seenCount + ' | New: ' + newListings.length + ' of ' + allListings.length);
-  
-  // Mark ALL fetched listings as seen NOW (even outside target/price — never re-check)
-  var now = Date.now();
-  allListings.forEach(l => { seenMap[l.address] = now; });
   
   // 3. Filter new listings to target neighborhoods
   var inTarget = newListings.filter(l => TARGET_ZIPS.has(l.zip));
@@ -610,49 +682,11 @@ async function run() {
     })),
   };
   
-  // 10. Store in Supabase
-  // Store each property in property_searches
-  for (var j = 0; j < report.properties.length; j++) {
-    var prop = report.properties[j];
-    var row = {
-      search_date: TODAY,
-      address: prop.address,
-      zip: prop.zip,
-      neighborhood: prop.neighborhood,
-      list_price: prop.list_price,
-      beds: prop.beds,
-      baths: prop.baths,
-      sqft: prop.sqft,
-      year_built: prop.year_built,
-      lot_size: prop.lot_size ? String(prop.lot_size) : null,
-      listing_url: prop.listing_url,
-      photo_urls: prop.photo_url ? [prop.photo_url] : [],
-      description_raw: prop.description,
-      source: 'redfin',
-      score: prop.score,
-      score_breakdown: prop.score_breakdown,
-      highlights: prop.mechanicals,
-      status: 'new',
-      property_type: 'single_family',
-      estimated_arv: prop.estimated_arv,
-    };
-    
-    var { error } = await supabase.from('property_searches')
-      .upsert(row, { onConflict: 'address,search_date', ignoreDuplicates: true });
-    if (error) console.log('  Store error for ' + prop.address + ': ' + error.message);
-  }
-  
-  // Store the full report as a property_report
-  var { error: reportError } = await supabase.from('property_reports').insert({
-    address: 'DAILY_REPORT_' + TODAY,
-    report_type: 'dd',
-    score: report.properties.length > 0 ? report.properties[0].score : 0,
-    summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
-    report_data: report,
-  });
-  if (reportError) console.log('Report store error: ' + reportError.message);
-  
-  // Persist the seen hashmap (all 1000 listings marked seen at step 2)
+  // 10. Store in Supabase. Only advance dedup state after every write succeeds.
+  await storeReport(report);
+
+  // Persist the seen hashmap for listings that actually passed the funnel.
+  markSeenListings(seenMap, inRange);
   saveSeenAddresses(seenMap);
   console.log('Seen addresses saved: ' + Object.keys(seenMap).length + ' total');
   
@@ -673,7 +707,18 @@ async function run() {
   return report;
 }
 
-run().catch(err => {
-  console.error('Failed:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch(err => {
+    console.error('Failed:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  STRATEGY,
+  TARGET_ZIPS,
+  filterUnseenListings,
+  markSeenListings,
+  storeReport,
+  run,
+};
