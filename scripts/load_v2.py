@@ -84,7 +84,7 @@ TABLES = {
         ("record_id","certificate_number","s"), ("registration_type","status","s"),
         ("address","address","s"), ("parcel_id","parcel_id","s"),
         ("registration_type","rental_type","s"),
-        ("owner_name" if False else "address","owner_name","s"),  # placeholder
+        ("owner_name","owner_name","s"),
         ("neighborhood","neighborhood","s"), ("council_district","council_district","s"),
         ("zip_code","zip_code","s"), ("longitude","longitude","n"), ("latitude","latitude","n"),
     ]),
