@@ -51,6 +51,24 @@ function sendError(res, message, statusCode = 500) {
 }
 
 /**
+ * Require a Bearer token that matches one of the configured env secrets.
+ */
+function requireBearerSecret(req, res, envNames) {
+  const names = Array.isArray(envNames) ? envNames : [envNames];
+  const expected = names.map((name) => process.env[name]).find(Boolean);
+  const headers = req.headers || {};
+  const authHeader = headers.authorization || headers.Authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+
+  if (!expected || token !== expected) {
+    sendError(res, 'Unauthorized', 403);
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Parse integer query param with default
  */
 function intParam(val, defaultVal) {
@@ -94,6 +112,7 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireBearerSecret,
   intParam,
   floatParam,
   parseBounds,
