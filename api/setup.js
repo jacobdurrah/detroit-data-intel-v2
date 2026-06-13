@@ -1,16 +1,31 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
 
+function getBearerToken(req) {
+  var authHeader = req.headers.authorization || req.headers.Authorization || '';
+  if (Array.isArray(authHeader)) authHeader = authHeader[0] || '';
+  return authHeader.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length).trim()
+    : '';
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
-    return sendError(res, 'POST with { db_url } required', 405);
+    return sendError(res, 'POST required', 405);
   }
 
-  var body = req.body || {};
-  var dbUrl = body.db_url || process.env.DATABASE_URL;
+  var setupKey = process.env.SETUP_API_KEY;
+  if (!setupKey) {
+    return sendError(res, 'Setup endpoint is not configured', 503);
+  }
+  if (getBearerToken(req) !== setupKey) {
+    return sendError(res, 'unauthorized', 403);
+  }
+
+  var dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
-    return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
+    return sendError(res, 'DATABASE_URL is required (Supabase pooler connection string)', 400);
   }
 
   try {
