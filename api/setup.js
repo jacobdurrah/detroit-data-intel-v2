@@ -1,16 +1,47 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
+const crypto = require('crypto');
+
+function getAuthorizationHeader(req) {
+  return req.headers?.authorization || req.headers?.Authorization || '';
+}
+
+function tokenMatches(provided, expected) {
+  if (!provided || !expected) return false;
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  return providedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+function requireSetupAuth(req, res) {
+  var expectedToken = process.env.SETUP_API_KEY;
+  if (!expectedToken) {
+    sendError(res, 'Setup endpoint is disabled: SETUP_API_KEY is not configured', 503);
+    return false;
+  }
+
+  var authHeader = getAuthorizationHeader(req);
+  var match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match || !tokenMatches(match[1], expectedToken)) {
+    sendError(res, 'Unauthorized', 401);
+    return false;
+  }
+
+  return true;
+}
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
-    return sendError(res, 'POST with { db_url } required', 405);
+    return sendError(res, 'POST required', 405);
   }
 
-  var body = req.body || {};
-  var dbUrl = body.db_url || process.env.DATABASE_URL;
+  if (!requireSetupAuth(req, res)) return;
+
+  var dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
-    return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
+    return sendError(res, 'DATABASE_URL is not configured', 500);
   }
 
   try {
