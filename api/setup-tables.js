@@ -1,12 +1,14 @@
-const { createClient } = require('@supabase/supabase-js');
+const { handleCors, sendJson, sendError, requireSetupAuth } = require('./_helpers');
 
 module.exports = async (req, res) => {
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-  
-  const secret = req.query.key;
-  if (secret !== 'frameworkai-setup-2026') {
-    return res.status(403).json({ error: 'unauthorized' });
+  if (handleCors(req, res)) return;
+  if (!requireSetupAuth(req, res)) return;
+
+  if (!process.env.SUPABASE_SERVICE_KEY) {
+    return sendError(res, 'SUPABASE_SERVICE_KEY is not configured', 500);
   }
+
+  const { createClient } = require('@supabase/supabase-js');
 
   // Use service role key to bypass RLS
   const sb = createClient(
@@ -27,5 +29,5 @@ module.exports = async (req, res) => {
   // Since we can't run DDL through PostgREST, we'll use the pg-meta endpoint
   // Actually, let's use the Supabase Management API SQL endpoint
 
-  res.json({ tables: results, message: 'Check which tables exist. If missing, create via Supabase Dashboard SQL editor.' });
+  sendJson(res, { tables: results, message: 'Check which tables exist. If missing, create via Supabase Dashboard SQL editor.' });
 };

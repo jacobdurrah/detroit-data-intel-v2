@@ -51,6 +51,29 @@ function sendError(res, message, statusCode = 500) {
 }
 
 /**
+ * Require a server-side setup key for administrative setup endpoints.
+ */
+function requireSetupAuth(req, res) {
+  var expected = process.env.SETUP_API_KEY;
+  if (!expected) {
+    sendError(res, 'Setup API key is not configured', 500);
+    return false;
+  }
+
+  var header = req.headers && (req.headers.authorization || req.headers.Authorization);
+  var token = typeof header === 'string' && header.indexOf('Bearer ') === 0
+    ? header.slice('Bearer '.length).trim()
+    : '';
+
+  if (token !== expected) {
+    sendError(res, 'Unauthorized', 401);
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Parse integer query param with default
  */
 function intParam(val, defaultVal) {
@@ -94,6 +117,7 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireSetupAuth,
   intParam,
   floatParam,
   parseBounds,
