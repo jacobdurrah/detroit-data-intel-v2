@@ -504,7 +504,7 @@ async function run() {
   var newListings = allListings.filter(l => !seenMap[l.address]);
   console.log('Seen: ' + seenCount + ' | New: ' + newListings.length + ' of ' + allListings.length);
   
-  // Mark ALL fetched listings as seen NOW (even outside target/price — never re-check)
+  // Stage all fetched listings as seen, but do not persist until DB writes succeed.
   var now = Date.now();
   allListings.forEach(l => { seenMap[l.address] = now; });
   
@@ -639,7 +639,9 @@ async function run() {
     
     var { error } = await supabase.from('property_searches')
       .upsert(row, { onConflict: 'address,search_date', ignoreDuplicates: true });
-    if (error) console.log('  Store error for ' + prop.address + ': ' + error.message);
+    if (error) {
+      throw new Error('Store error for ' + prop.address + ': ' + error.message);
+    }
   }
   
   // Store the full report as a property_report
@@ -650,9 +652,11 @@ async function run() {
     summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
     report_data: report,
   });
-  if (reportError) console.log('Report store error: ' + reportError.message);
+  if (reportError) {
+    throw new Error('Report store error: ' + reportError.message);
+  }
   
-  // Persist the seen hashmap (all 1000 listings marked seen at step 2)
+  // Persist the seen hashmap only after the report and property rows are stored.
   saveSeenAddresses(seenMap);
   console.log('Seen addresses saved: ' + Object.keys(seenMap).length + ' total');
   

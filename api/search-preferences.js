@@ -1,8 +1,9 @@
-const { handleCors, sendJson, sendError } = require('./_helpers');
+const { handleCors, requireBearerAuth, sendJson, sendError } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
+  if (!requireBearerAuth(req, res, 'WORKFLOW_API_KEY', 'Workflow API')) return;
 
   try {
     var { data, error } = await supabase
