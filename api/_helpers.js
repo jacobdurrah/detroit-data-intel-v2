@@ -9,6 +9,33 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+function safeEqual(a, b) {
+  if (!a || !b) return false;
+  var crypto = require('crypto');
+  var aBuf = Buffer.from(String(a));
+  var bBuf = Buffer.from(String(b));
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function getBearerToken(req) {
+  var header = req.headers?.authorization || req.headers?.Authorization || '';
+  var match = String(header).match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : '';
+}
+
+function requireBearerAuth(req, res, envName, label) {
+  var expected = process.env[envName];
+  if (!expected) {
+    return sendError(res, (label || 'API') + ' is not configured', 503);
+  }
+  if (!safeEqual(getBearerToken(req), expected)) {
+    res.setHeader('WWW-Authenticate', 'Bearer');
+    return sendError(res, 'Unauthorized', 401);
+  }
+  return true;
+}
+
 /**
  * Handle OPTIONS preflight and return true if handled
  */
@@ -91,6 +118,7 @@ function filterByBounds(records, bounds) {
 module.exports = {
   CORS_HEADERS,
   handleCors,
+  requireBearerAuth,
   sendPaginated,
   sendJson,
   sendError,
