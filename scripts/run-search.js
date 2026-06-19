@@ -7,7 +7,6 @@
  * Cron: daily at 7:30 AM ET
  */
 
-const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 
@@ -19,9 +18,13 @@ function getRequiredSupabaseServiceKey(env) {
   return key;
 }
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co';
-const SERVICE_KEY = getRequiredSupabaseServiceKey(process.env);
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+function createSupabaseClient(env) {
+  const { createClient } = require('@supabase/supabase-js');
+  const url = env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co';
+  return createClient(url, getRequiredSupabaseServiceKey(env));
+}
+
+let supabase;
 // Use ET date so report date matches Jacob's local time
 const TODAY = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Detroit' })).toISOString().slice(0, 10);
 
@@ -500,6 +503,8 @@ async function checkPermits(addresses) {
 /* ---- Main Pipeline ---- */
 
 async function run() {
+  supabase = createSupabaseClient(process.env);
+
   console.log('=== Dusty Turnkey Intelligence Report — ' + TODAY + ' ===\n');
   
   // 1. Fetch all listings
@@ -688,4 +693,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { getRequiredSupabaseServiceKey };
+module.exports = { createSupabaseClient, getRequiredSupabaseServiceKey };
