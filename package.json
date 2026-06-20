@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vercel dev",
     "build": "vercel build",
+    "test:api": "node --test tests/*.test.js",
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui"
   },

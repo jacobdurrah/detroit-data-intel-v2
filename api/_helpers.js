@@ -9,6 +9,24 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+function safeTokenEquals(actual, expected) {
+  if (!actual || !expected || actual.length !== expected.length) return false;
+
+  try {
+    const crypto = require('crypto');
+    return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+  } catch (err) {
+    return false;
+  }
+}
+
+function getBearerToken(req) {
+  const headers = req.headers || {};
+  const auth = headers.authorization || headers.Authorization || '';
+  const prefix = 'Bearer ';
+  return auth.startsWith(prefix) ? auth.slice(prefix.length) : null;
+}
+
 /**
  * Handle OPTIONS preflight and return true if handled
  */
@@ -48,6 +66,30 @@ function sendJson(res, data, statusCode = 200) {
  */
 function sendError(res, message, statusCode = 500) {
   res.status(statusCode).json({ error: message });
+}
+
+/**
+ * Require a server-configured bearer token for privileged API mutations.
+ */
+function requireApiAuth(req, res, envName = 'SETUP_API_KEY') {
+  const expected = process.env[envName];
+  if (!expected) {
+    sendError(res, envName + ' is not configured', 500);
+    return false;
+  }
+
+  const token = getBearerToken(req);
+  if (!token) {
+    sendError(res, 'Authorization bearer token is required', 401);
+    return false;
+  }
+
+  if (!safeTokenEquals(token, expected)) {
+    sendError(res, 'Forbidden', 403);
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -94,6 +136,7 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireApiAuth,
   intParam,
   floatParam,
   parseBounds,

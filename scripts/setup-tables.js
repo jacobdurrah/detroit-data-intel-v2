@@ -93,31 +93,18 @@ CREATE TABLE IF NOT EXISTS property_reports (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable RLS but allow all for now (service key bypasses)
+-- Enable RLS. Server-side service key bypasses RLS; anonymous clients should not.
 ALTER TABLE property_searches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE property_reports ENABLE ROW LEVEL SECURITY;
 
--- Anon read/write policies
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'property_searches') THEN
-    CREATE POLICY "anon_all" ON property_searches FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'search_feedback') THEN
-    CREATE POLICY "anon_all" ON search_feedback FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'saved_properties') THEN
-    CREATE POLICY "anon_all" ON saved_properties FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'search_preferences') THEN
-    CREATE POLICY "anon_all" ON search_preferences FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'property_reports') THEN
-    CREATE POLICY "anon_all" ON property_reports FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "anon_all" ON property_searches;
+DROP POLICY IF EXISTS "anon_all" ON search_feedback;
+DROP POLICY IF EXISTS "anon_all" ON saved_properties;
+DROP POLICY IF EXISTS "anon_all" ON search_preferences;
+DROP POLICY IF EXISTS "anon_all" ON property_reports;
 
 -- Insert default preferences
 INSERT INTO search_preferences (key, value, source) VALUES
