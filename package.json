@@ -10,7 +10,7 @@
     "dev": "vercel dev",
     "build": "vercel build",
     "test": "npx playwright test",
-    "test:api": "node --test tests/api-auth.node.js",
+    "test:api": "node --test tests/*.node.js",
     "test:ui": "npx playwright test --ui"
   },
   "dependencies": {
