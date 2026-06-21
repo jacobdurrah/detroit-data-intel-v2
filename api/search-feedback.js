@@ -1,4 +1,4 @@
-const { handleCors, sendJson, sendError, intParam } = require('./_helpers');
+const { handleCors, sendJson, sendError, intParam, requirePropertyWriteAuth } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 module.exports = async (req, res) => {
@@ -6,6 +6,8 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'POST') {
+      if (!requirePropertyWriteAuth(req, res)) return;
+
       var body = req.body || {};
       if (!body.search_id || !body.feedback) {
         return sendError(res, 'search_id and feedback (up/down) are required', 400);

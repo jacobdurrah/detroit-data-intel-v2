@@ -50,6 +50,55 @@ function sendError(res, message, statusCode = 500) {
   res.status(statusCode).json({ error: message });
 }
 
+function getHeader(req, name) {
+  if (!req || !req.headers) return '';
+  var titleCase = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+  return req.headers[name] || req.headers[name.toLowerCase()] || req.headers[name.toUpperCase()] || req.headers[titleCase] || '';
+}
+
+function safeEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  var diff = 0;
+  for (var i = 0; i < a.length; i += 1) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+function requireBearerAuth(req, res, envNames) {
+  var names = Array.isArray(envNames) ? envNames : [envNames || 'SETUP_API_KEY'];
+  var expected = '';
+  var configuredName = '';
+  for (var i = 0; i < names.length; i += 1) {
+    var value = (process.env[names[i]] || '').trim();
+    if (value) {
+      expected = value;
+      configuredName = names[i];
+      break;
+    }
+  }
+
+  if (!expected) {
+    console.error('Missing API auth secret. Set one of: ' + names.join(', '));
+    sendError(res, 'Server authorization is not configured', 503);
+    return false;
+  }
+
+  var auth = String(getHeader(req, 'authorization') || '');
+  var match = auth.match(/^Bearer\s+(.+)$/i);
+  if (!match || !safeEqual(match[1].trim(), expected)) {
+    sendError(res, 'Unauthorized', 401);
+    return false;
+  }
+
+  req.authenticatedWith = configuredName;
+  return true;
+}
+
+function requirePropertyWriteAuth(req, res) {
+  return requireBearerAuth(req, res, ['PROPERTY_WRITE_API_KEY', 'SETUP_API_KEY']);
+}
+
 /**
  * Parse integer query param with default
  */
@@ -94,6 +143,8 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireBearerAuth,
+  requirePropertyWriteAuth,
   intParam,
   floatParam,
   parseBounds,

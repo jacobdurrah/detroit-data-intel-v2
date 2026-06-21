@@ -422,7 +422,7 @@ async function updateMedians() {
   var page = 0;
   var hasMore = true;
   while (hasMore && page < 20) {
-    var { data: batch } = await supabase.from('sales').select('neighborhood, sale_price, zip')
+    var { data: batch } = await supabase.from('sales').select('neighborhood, sale_price, zip_code')
       .gte('sale_date', cutoff).gt('sale_price', 10000)
       .range(page * 1000, (page + 1) * 1000 - 1);
     if (batch && batch.length > 0) { allSales = allSales.concat(batch); hasMore = batch.length === 1000; page++; }
@@ -433,9 +433,9 @@ async function updateMedians() {
   var zipSales = {};
   allSales.forEach(s => {
     var price = Number(s.sale_price);
-    if (price > 0 && s.zip) {
-      if (!zipSales[s.zip]) zipSales[s.zip] = [];
-      zipSales[s.zip].push(price);
+    if (price > 0 && s.zip_code) {
+      if (!zipSales[s.zip_code]) zipSales[s.zip_code] = [];
+      zipSales[s.zip_code].push(price);
     }
   });
   
