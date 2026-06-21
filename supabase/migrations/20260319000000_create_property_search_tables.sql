@@ -86,23 +86,11 @@ ALTER TABLE saved_properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE property_reports ENABLE ROW LEVEL SECURITY;
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'property_searches') THEN
-    CREATE POLICY "anon_all" ON property_searches FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'search_feedback') THEN
-    CREATE POLICY "anon_all" ON search_feedback FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'saved_properties') THEN
-    CREATE POLICY "anon_all" ON saved_properties FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'search_preferences') THEN
-    CREATE POLICY "anon_all" ON search_preferences FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'property_reports') THEN
-    CREATE POLICY "anon_all" ON property_reports FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "anon_all" ON property_searches;
+DROP POLICY IF EXISTS "anon_all" ON search_feedback;
+DROP POLICY IF EXISTS "anon_all" ON saved_properties;
+DROP POLICY IF EXISTS "anon_all" ON search_preferences;
+DROP POLICY IF EXISTS "anon_all" ON property_reports;
 
 INSERT INTO search_preferences (key, value, source) VALUES
   ('mechanical_weight', 25, 'default'),
