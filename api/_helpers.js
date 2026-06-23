@@ -1,6 +1,7 @@
 /**
  * Shared helpers for Detroit Data Intel V2 API functions
  */
+const crypto = require('crypto');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +51,35 @@ function sendError(res, message, statusCode = 500) {
   res.status(statusCode).json({ error: message });
 }
 
+function timingSafeEqualString(a, b) {
+  var aBuf = Buffer.from(String(a || ''));
+  var bBuf = Buffer.from(String(b || ''));
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function getBearerToken(req) {
+  var auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+  var match = String(auth).match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function requireWriteAuth(req, res) {
+  var expected = String(process.env.PROPERTY_PIPELINE_API_KEY || '').trim();
+  if (!expected) {
+    console.error('PROPERTY_PIPELINE_API_KEY is required for property write APIs');
+    sendError(res, 'Write API key is not configured', 503);
+    return false;
+  }
+
+  if (!timingSafeEqualString(getBearerToken(req), expected)) {
+    sendError(res, 'Unauthorized', 401);
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Parse integer query param with default
  */
@@ -94,6 +124,7 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireWriteAuth,
   intParam,
   floatParam,
   parseBounds,
