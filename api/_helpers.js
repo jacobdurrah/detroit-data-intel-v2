@@ -50,6 +50,27 @@ function sendError(res, message, statusCode = 500) {
   res.status(statusCode).json({ error: message });
 }
 
+function getAuthorizationHeader(req) {
+  const headers = req.headers || {};
+  return headers.authorization || headers.Authorization || '';
+}
+
+function requireBearerApiKey(req, res, envVarName, label) {
+  const expected = process.env[envVarName];
+
+  if (!expected) {
+    sendError(res, `${label} API key is not configured`, 503);
+    return false;
+  }
+
+  if (getAuthorizationHeader(req) !== `Bearer ${expected}`) {
+    sendError(res, 'Unauthorized', 401);
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Parse integer query param with default
  */
@@ -94,6 +115,7 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireBearerApiKey,
   intParam,
   floatParam,
   parseBounds,
