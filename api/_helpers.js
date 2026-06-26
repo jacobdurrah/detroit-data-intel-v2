@@ -50,6 +50,44 @@ function sendError(res, message, statusCode = 500) {
   res.status(statusCode).json({ error: message });
 }
 
+function getAuthorizationHeader(req) {
+  return (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+}
+
+function constantTimeEquals(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  var crypto = require('crypto');
+  var aBuf = Buffer.from(a);
+  var bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function requireBearerToken(req, res, envName, label) {
+  var expected = process.env[envName];
+  if (!expected) {
+    sendError(res, label + ' is not configured', 503);
+    return false;
+  }
+
+  var header = getAuthorizationHeader(req);
+  var actual = header.indexOf('Bearer ') === 0 ? header.slice(7) : '';
+  if (!constantTimeEquals(actual, expected)) {
+    sendError(res, 'unauthorized', 401);
+    return false;
+  }
+
+  return true;
+}
+
+function requireSetupAuth(req, res) {
+  return requireBearerToken(req, res, 'SETUP_API_KEY', 'setup API');
+}
+
+function requirePropertyPipelineAuth(req, res) {
+  return requireBearerToken(req, res, 'PROPERTY_PIPELINE_API_KEY', 'property pipeline API');
+}
+
 /**
  * Parse integer query param with default
  */
@@ -94,6 +132,9 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireBearerToken,
+  requireSetupAuth,
+  requirePropertyPipelineAuth,
   intParam,
   floatParam,
   parseBounds,

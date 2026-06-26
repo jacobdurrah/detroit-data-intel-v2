@@ -3,9 +3,14 @@
  */
 const { createClient } = require('@supabase/supabase-js');
 
+const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+if (!serviceKey) {
+  throw new Error('Missing SUPABASE_SERVICE_KEY environment variable');
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co',
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY
+  serviceKey
 );
 
 // --- Compact mappers: Supabase full column names → abbreviated for backward compat ---
