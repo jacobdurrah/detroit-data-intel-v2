@@ -1,17 +1,19 @@
 const { createClient } = require('@supabase/supabase-js');
+const { handleCors, sendError, requireSetupAuth } = require('./_helpers');
 
 module.exports = async (req, res) => {
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-  
-  const secret = req.query.key;
-  if (secret !== 'frameworkai-setup-2026') {
-    return res.status(403).json({ error: 'unauthorized' });
+  if (handleCors(req, res)) return;
+  if (!requireSetupAuth(req, res)) return;
+
+  const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+  if (!serviceKey) {
+    return sendError(res, 'SUPABASE_SERVICE_KEY is required', 503);
   }
 
   // Use service role key to bypass RLS
   const sb = createClient(
-    'https://vgtwkgckvryxbgujnqro.supabase.co',
-    process.env.SUPABASE_SERVICE_KEY
+    process.env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co',
+    serviceKey
   );
 
   const results = [];
