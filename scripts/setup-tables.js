@@ -93,29 +93,35 @@ CREATE TABLE IF NOT EXISTS property_reports (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable RLS but allow all for now (service key bypasses)
+-- Enable RLS; service key bypasses RLS for authenticated server-side writes.
 ALTER TABLE property_searches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE property_reports ENABLE ROW LEVEL SECURITY;
 
--- Anon read/write policies
+DROP POLICY IF EXISTS "anon_all" ON property_searches;
+DROP POLICY IF EXISTS "anon_all" ON search_feedback;
+DROP POLICY IF EXISTS "anon_all" ON saved_properties;
+DROP POLICY IF EXISTS "anon_all" ON search_preferences;
+DROP POLICY IF EXISTS "anon_all" ON property_reports;
+
+-- Public APIs may read these tables; writes must go through authorized service-key endpoints.
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'property_searches') THEN
-    CREATE POLICY "anon_all" ON property_searches FOR ALL USING (true) WITH CHECK (true);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'public_read' AND tablename = 'property_searches') THEN
+    CREATE POLICY "public_read" ON property_searches FOR SELECT USING (true);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'search_feedback') THEN
-    CREATE POLICY "anon_all" ON search_feedback FOR ALL USING (true) WITH CHECK (true);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'public_read' AND tablename = 'search_feedback') THEN
+    CREATE POLICY "public_read" ON search_feedback FOR SELECT USING (true);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'saved_properties') THEN
-    CREATE POLICY "anon_all" ON saved_properties FOR ALL USING (true) WITH CHECK (true);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'public_read' AND tablename = 'saved_properties') THEN
+    CREATE POLICY "public_read" ON saved_properties FOR SELECT USING (true);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'search_preferences') THEN
-    CREATE POLICY "anon_all" ON search_preferences FOR ALL USING (true) WITH CHECK (true);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'public_read' AND tablename = 'search_preferences') THEN
+    CREATE POLICY "public_read" ON search_preferences FOR SELECT USING (true);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all' AND tablename = 'property_reports') THEN
-    CREATE POLICY "anon_all" ON property_reports FOR ALL USING (true) WITH CHECK (true);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'public_read' AND tablename = 'property_reports') THEN
+    CREATE POLICY "public_read" ON property_reports FOR SELECT USING (true);
   END IF;
 END $$;
 
