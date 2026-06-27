@@ -56,24 +56,27 @@ function sendError(res, message, statusCode = 500) {
 function requireBearerToken(req, res, envName) {
   var expected = process.env[envName];
   if (!expected) {
-    return sendError(res, 'Endpoint auth is not configured', 503);
+    sendError(res, 'Endpoint auth is not configured', 503);
+    return true;
   }
 
   var header = req.headers.authorization || req.headers.Authorization || '';
   var match = header.match(/^Bearer\s+(.+)$/i);
   if (!match || match[1] !== expected) {
-    return sendError(res, 'Unauthorized', 401);
+    sendError(res, 'Unauthorized', 401);
+    return true;
   }
 
-  return null;
+  return false;
 }
 
 function requireEnvVar(res, envName) {
   if (!process.env[envName]) {
-    return sendError(res, envName + ' is not configured', 503);
+    sendError(res, envName + ' is not configured', 503);
+    return true;
   }
 
-  return null;
+  return false;
 }
 
 /**
