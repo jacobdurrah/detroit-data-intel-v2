@@ -1,4 +1,4 @@
-const { handleCors, sendJson, sendError, intParam } = require('./_helpers');
+const { handleCors, sendJson, sendError, intParam, requireBearerToken, requireEnvVar } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 module.exports = async (req, res) => {
@@ -6,6 +6,11 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'PUT') {
+      var authError = requireBearerToken(req, res, 'PROPERTY_PIPELINE_API_KEY');
+      if (authError) return;
+      var configError = requireEnvVar(res, 'SUPABASE_SERVICE_KEY');
+      if (configError) return;
+
       var id = intParam(req.query.id, null);
       if (!id) return sendError(res, 'id is required', 400);
 
@@ -32,6 +37,11 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
+      var authError = requireBearerToken(req, res, 'PROPERTY_PIPELINE_API_KEY');
+      if (authError) return;
+      var configError = requireEnvVar(res, 'SUPABASE_SERVICE_KEY');
+      if (configError) return;
+
       var body = req.body || {};
       if (!body.address) return sendError(res, 'address is required', 400);
 
