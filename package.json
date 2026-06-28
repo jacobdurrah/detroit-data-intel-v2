@@ -10,7 +10,8 @@
     "dev": "vercel dev",
     "build": "vercel build",
     "test": "npx playwright test",
-    "test:ui": "npx playwright test --ui"
+    "test:ui": "npx playwright test --ui",
+    "test:api": "node --test tests/*.node.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
