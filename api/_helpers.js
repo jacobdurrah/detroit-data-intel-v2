@@ -51,6 +51,29 @@ function sendError(res, message, statusCode = 500) {
 }
 
 /**
+ * Return true after sending an error when a protected API key check fails.
+ */
+function requireBearerToken(req, res, envName, label) {
+  const expected = process.env[envName];
+  if (!expected) {
+    sendError(res, `${label || envName} is not configured`, 503);
+    return true;
+  }
+
+  const header = req.headers && (req.headers.authorization || req.headers.Authorization);
+  const token = typeof header === 'string' && header.startsWith('Bearer ')
+    ? header.slice('Bearer '.length)
+    : '';
+
+  if (token !== expected) {
+    sendError(res, 'Unauthorized', 401);
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Parse integer query param with default
  */
 function intParam(val, defaultVal) {
@@ -94,6 +117,7 @@ module.exports = {
   sendPaginated,
   sendJson,
   sendError,
+  requireBearerToken,
   intParam,
   floatParam,
   parseBounds,
