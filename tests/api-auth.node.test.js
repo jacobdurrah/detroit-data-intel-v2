@@ -1,7 +1,26 @@
 const assert = require('node:assert/strict');
+const Module = require('node:module');
 const test = require('node:test');
 
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test-anon-key';
+
+const originalLoad = Module._load;
+Module._load = function patchedLoad(request, parent, isMain) {
+  if (request === './_supabase' && parent && parent.filename && parent.filename.includes('/api/')) {
+    return {
+      supabase: {
+        from() {
+          throw new Error('Supabase should not be called before auth succeeds');
+        },
+      },
+    };
+  }
+  return originalLoad.apply(this, arguments);
+};
+
+test.after(() => {
+  Module._load = originalLoad;
+});
 
 function mockRes() {
   return {
