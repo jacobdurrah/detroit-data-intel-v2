@@ -1,4 +1,4 @@
-const { handleCors, sendJson, sendError, intParam } = require('./_helpers');
+const { handleCors, sendJson, sendError, intParam, requireBearerToken } = require('./_helpers');
 const { supabase } = require('./_supabase');
 
 module.exports = async (req, res) => {
@@ -56,6 +56,8 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
+      if (requireBearerToken(req, res, 'PROPERTY_PIPELINE_API_KEY', 'Property pipeline API key')) return;
+
       var body = req.body || {};
       if (!body.address) return sendError(res, 'address is required', 400);
 
