@@ -1,16 +1,17 @@
-const { handleCors, sendJson, sendError } = require('./_helpers');
+const { handleCors, sendJson, sendError, requireBearerToken } = require('./_helpers');
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
-    return sendError(res, 'POST with { db_url } required', 405);
+    return sendError(res, 'POST required', 405);
   }
 
-  var body = req.body || {};
-  var dbUrl = body.db_url || process.env.DATABASE_URL;
+  if (requireBearerToken(req, res, 'SETUP_API_KEY')) return;
+
+  var dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
-    return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
+    return sendError(res, 'DATABASE_URL is not configured', 503);
   }
 
   try {
@@ -79,11 +80,16 @@ ALTER TABLE saved_properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE property_reports ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_all' AND tablename='property_searches') THEN CREATE POLICY "anon_all" ON property_searches FOR ALL USING (true) WITH CHECK (true); END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_all' AND tablename='search_feedback') THEN CREATE POLICY "anon_all" ON search_feedback FOR ALL USING (true) WITH CHECK (true); END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_all' AND tablename='saved_properties') THEN CREATE POLICY "anon_all" ON saved_properties FOR ALL USING (true) WITH CHECK (true); END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_all' AND tablename='search_preferences') THEN CREATE POLICY "anon_all" ON search_preferences FOR ALL USING (true) WITH CHECK (true); END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_all' AND tablename='property_reports') THEN CREATE POLICY "anon_all" ON property_reports FOR ALL USING (true) WITH CHECK (true); END IF;
+  DROP POLICY IF EXISTS "anon_all" ON property_searches;
+  DROP POLICY IF EXISTS "anon_all" ON search_feedback;
+  DROP POLICY IF EXISTS "anon_all" ON saved_properties;
+  DROP POLICY IF EXISTS "anon_all" ON search_preferences;
+  DROP POLICY IF EXISTS "anon_all" ON property_reports;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_read' AND tablename='property_searches') THEN CREATE POLICY "anon_read" ON property_searches FOR SELECT USING (true); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_read' AND tablename='search_feedback') THEN CREATE POLICY "anon_read" ON search_feedback FOR SELECT USING (true); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_read' AND tablename='saved_properties') THEN CREATE POLICY "anon_read" ON saved_properties FOR SELECT USING (true); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_read' AND tablename='search_preferences') THEN CREATE POLICY "anon_read" ON search_preferences FOR SELECT USING (true); END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname='anon_read' AND tablename='property_reports') THEN CREATE POLICY "anon_read" ON property_reports FOR SELECT USING (true); END IF;
 END $$;
 INSERT INTO search_preferences (key, value, source) VALUES
   ('mechanical_weight',25,'default'),('roof_weight',20,'default'),
