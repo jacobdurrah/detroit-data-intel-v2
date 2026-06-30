@@ -12,7 +12,11 @@ const fs = require('fs');
 const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co';
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+if (!SERVICE_KEY) {
+  console.error('SUPABASE_SERVICE_KEY or SUPABASE_KEY is required');
+  process.exit(1);
+}
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 // Use ET date so report date matches Jacob's local time
 const TODAY = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Detroit' })).toISOString().slice(0, 10);
@@ -39,7 +43,9 @@ function loadSeenAddresses() {
 function saveSeenAddresses(map) {
   var dir = path.dirname(SEEN_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(SEEN_FILE, JSON.stringify(map, null, 0));
+  var tmp = SEEN_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(map, null, 0));
+  fs.renameSync(tmp, SEEN_FILE);
 }
 
 function v(obj) { return obj && typeof obj === 'object' && 'value' in obj ? obj.value : obj; }
@@ -638,8 +644,8 @@ async function run() {
     };
     
     var { error } = await supabase.from('property_searches')
-      .upsert(row, { onConflict: 'address,search_date', ignoreDuplicates: true });
-    if (error) console.log('  Store error for ' + prop.address + ': ' + error.message);
+      .upsert(row, { onConflict: 'address,search_date' });
+    if (error) throw new Error('Store error for ' + prop.address + ': ' + error.message);
   }
   
   // Store the full report as a property_report
@@ -650,7 +656,7 @@ async function run() {
     summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
     report_data: report,
   });
-  if (reportError) console.log('Report store error: ' + reportError.message);
+  if (reportError) throw new Error('Report store error: ' + reportError.message);
   
   // Persist the seen hashmap (all 1000 listings marked seen at step 2)
   saveSeenAddresses(seenMap);
