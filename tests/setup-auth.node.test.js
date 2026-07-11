@@ -17,15 +17,19 @@ function createRes() {
   };
 }
 
-function loadSetupHandler(pgStub) {
+function loadSetupHandler() {
   delete require.cache[setupPath];
+  return require(setupPath);
+}
+
+async function withMockedPg(pgStub, fn) {
   const originalLoad = Module._load;
   Module._load = function patchedLoad(request, parent, isMain) {
     if (request === 'pg') return pgStub;
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
-    return require(setupPath);
+    return await fn();
   } finally {
     Module._load = originalLoad;
   }
@@ -39,7 +43,7 @@ function restoreEnv(name, value) {
 test('setup fails closed when SETUP_API_KEY is missing', async () => {
   const oldSetupKey = process.env.SETUP_API_KEY;
   delete process.env.SETUP_API_KEY;
-  const handler = loadSetupHandler({});
+  const handler = loadSetupHandler();
   const res = createRes();
 
   await handler({ method: 'POST', headers: {}, body: { db_url: 'postgres://attacker' } }, res);
@@ -53,12 +57,12 @@ test('setup rejects requests without the setup bearer token', async () => {
   const oldSetupKey = process.env.SETUP_API_KEY;
   process.env.SETUP_API_KEY = 'setup-secret';
   let constructed = false;
-  const handler = loadSetupHandler({
-    Client: function Client() { constructed = true; },
-  });
+  const handler = loadSetupHandler();
   const res = createRes();
 
-  await handler({ method: 'POST', headers: { authorization: 'Bearer wrong' }, body: {} }, res);
+  await withMockedPg({ Client: function Client() { constructed = true; } }, async () => {
+    await handler({ method: 'POST', headers: { authorization: 'Bearer wrong' }, body: {} }, res);
+  });
 
   assert.equal(res.statusCode, 401);
   assert.equal(constructed, false);
@@ -71,7 +75,8 @@ test('authorized setup uses server DATABASE_URL and removes anonymous write poli
   process.env.SETUP_API_KEY = 'setup-secret';
   process.env.DATABASE_URL = 'postgres://server-db';
   const calls = {};
-  const handler = loadSetupHandler({
+  const handler = loadSetupHandler();
+  const pgStub = {
     Client: class Client {
       constructor(options) {
         calls.connectionString = options.connectionString;
@@ -80,14 +85,16 @@ test('authorized setup uses server DATABASE_URL and removes anonymous write poli
       async query(sql) { calls.sql = sql; }
       async end() { calls.ended = true; }
     },
-  });
+  };
   const res = createRes();
 
-  await handler({
-    method: 'POST',
-    headers: { authorization: 'Bearer setup-secret' },
-    body: { db_url: 'postgres://attacker-db' },
-  }, res);
+  await withMockedPg(pgStub, async () => {
+    await handler({
+      method: 'POST',
+      headers: { authorization: 'Bearer setup-secret' },
+      body: { db_url: 'postgres://attacker-db' },
+    }, res);
+  });
 
   assert.equal(res.statusCode, 200);
   assert.equal(calls.connectionString, 'postgres://server-db');
