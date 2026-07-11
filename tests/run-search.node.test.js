@@ -78,9 +78,16 @@ test('run-search persists seen addresses only after storage failure checks', () 
 
 test('refresh_v2 protects truncates with a transaction and fails partial REST loads', () => {
   const source = fs.readFileSync(refreshPath, 'utf8');
+  const begin = source.indexOf('BEGIN;');
+  const truncate = source.indexOf('TRUNCATE {name};');
+  const copy = source.indexOf("\\copy {name}");
+  const commit = source.indexOf('COMMIT;');
 
-  assert.match(source, /BEGIN;\s*\nTRUNCATE \{name\};\s*\n\\copy \{name\}/);
-  assert.match(source, /COMMIT;/);
+  assert.ok(begin !== -1, 'COPY load must begin a transaction');
+  assert.ok(truncate !== -1, 'COPY load must truncate inside the transaction');
+  assert.ok(copy !== -1, 'COPY load must load after truncate');
+  assert.ok(commit !== -1, 'COPY load must commit only after COPY succeeds');
+  assert.ok(begin < truncate && truncate < copy && copy < commit);
   assert.match(source, /if errors > 0 or loaded != total:/);
   assert.match(source, /return False/);
 });
