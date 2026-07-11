@@ -389,8 +389,10 @@ def load_table_psql(name, csv_path, pg_columns):
     # Uses SET statement_timeout to avoid Supabase's default 2-min limit
     sql = f"""
 SET statement_timeout = '600000';
+BEGIN;
 TRUNCATE {name};
 \\copy {name} ({cols_str}) FROM '{csv_path}' WITH (FORMAT csv, HEADER true, NULL '', FORCE_NULL ({force_null}))
+COMMIT;
 """
 
     print(f"  [{name}] Loading via TRUNCATE + COPY...", flush=True)
@@ -424,12 +426,14 @@ def _load_table_rest(name, csv_path, pg_columns):
     start = time.time()
     loaded = 0
     errors = 0
+    total = 0
 
     with open(csv_path, "r", encoding="utf-8-sig", errors="replace") as f:
         reader = csv_mod.DictReader(f)
         batch = []
 
         for row in reader:
+            total += 1
             record = {col: (row.get(col, "").strip() or None) for col in pg_columns}
             batch.append(record)
 
@@ -462,7 +466,7 @@ def _load_table_rest(name, csv_path, pg_columns):
 
         if batch:
             body = json.dumps(batch).encode()
-            subprocess.run(
+            req = subprocess.run(
                 ["curl", "-s", "--max-time", "60",
                  "-X", "POST", f"{SUPABASE_URL}/rest/v1/{name}",
                  "-H", f"apikey: {SUPABASE_KEY}",
@@ -472,7 +476,14 @@ def _load_table_rest(name, csv_path, pg_columns):
                  "-d", "@-"],
                 input=body, capture_output=True, timeout=90,
             )
-            loaded += len(batch)
+            if req.returncode == 0 and b"error" not in req.stdout.lower():
+                loaded += len(batch)
+            else:
+                errors += 1
+
+    if errors > 0 or loaded != total:
+        print(f"  [{name}] ❌ REST loaded {loaded:,}/{total:,} rows with {errors} failed batch(es)")
+        return False
 
     elapsed = time.time() - start
     rate = loaded / elapsed if elapsed > 0 else 0
