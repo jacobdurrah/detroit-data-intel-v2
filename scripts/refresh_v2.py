@@ -374,7 +374,7 @@ def transform_csv(name, source_path, data_dir=DATA_DIR):
 
 def load_table_psql(name, csv_path, pg_columns):
     """Load a transformed CSV into Supabase via psql COPY.
-    Strategy: Create temp table → COPY into temp → INSERT ... ON CONFLICT.
+    Strategy: transactionally TRUNCATE + COPY a complete replacement dataset.
     """
     pk = PRIMARY_KEYS.get(name)
     if not pk:
@@ -386,11 +386,14 @@ def load_table_psql(name, csv_path, pg_columns):
 
     # TRUNCATE + COPY — full table replace
     # This is the fastest approach for monthly refreshes where we get complete datasets
-    # Uses SET statement_timeout to avoid Supabase's default 2-min limit
+    # Keep both statements in one transaction so a COPY failure cannot leave the
+    # table empty after TRUNCATE.
     sql = f"""
 SET statement_timeout = '600000';
+BEGIN;
 TRUNCATE {name};
 \\copy {name} ({cols_str}) FROM '{csv_path}' WITH (FORMAT csv, HEADER true, NULL '', FORCE_NULL ({force_null}))
+COMMIT;
 """
 
     print(f"  [{name}] Loading via TRUNCATE + COPY...", flush=True)
@@ -413,6 +416,42 @@ TRUNCATE {name};
         return False
 
     print(f"  [{name}] ✅ Loaded ({elapsed:.0f}s)")
+    return True
+
+
+def relink_sales_street_ids():
+    """Restore block/street linkage after a full sales table refresh."""
+    sql = """
+SET statement_timeout = '600000';
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS street_id INTEGER;
+UPDATE sales s
+SET street_id = asm.street_id
+FROM address_street_map asm
+WHERE UPPER(TRIM(s.address)) = UPPER(TRIM(asm.street_number || ' ' || asm.street_name))
+AND s.street_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sales_street_id ON sales(street_id);
+SELECT COUNT(*) AS linked_sales FROM sales WHERE street_id IS NOT NULL;
+"""
+
+    print("  [sales] Relinking street_id from address_street_map...", flush=True)
+    result = subprocess.run(
+        [PSQL, PSQL_URL, "-v", "ON_ERROR_STOP=1"],
+        input=sql, capture_output=True, text=True, timeout=900,
+    )
+    if result.returncode != 0:
+        print(f"  [sales] ❌ street_id relink failed: {result.stderr[:500]}")
+        return False
+
+    linked = None
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped.isdigit():
+            linked = int(stripped)
+
+    if linked is not None:
+        print(f"  [sales] ✅ street_id linked on {linked:,} sales")
+    else:
+        print("  [sales] ✅ street_id relink complete")
     return True
 
 
@@ -603,6 +642,8 @@ def cmd_load(tables=None):
 
         # Load
         ok = load_table_psql(name, transformed, columns)
+        if ok and name == "sales":
+            ok = relink_sales_street_ids()
 
         # Get after count
         if ok:
