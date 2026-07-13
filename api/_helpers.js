@@ -30,6 +30,24 @@ function checkAuth(req, res) {
 }
 
 /**
+ * Setup endpoints can mutate database schema, so they require a separate
+ * server-side secret and fail closed when it is not configured.
+ */
+function checkSetupAuth(req, res) {
+  const expected = process.env.SETUP_API_KEY;
+  if (!expected) {
+    res.status(500).json({ error: 'SETUP_API_KEY is not configured.' });
+    return true;
+  }
+
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (token && token === expected) return false;
+
+  res.status(401).json({ error: 'Unauthorized. Pass Authorization: Bearer <SETUP_API_KEY>.' });
+  return true;
+}
+
+/**
  * Handle OPTIONS preflight and return true if handled
  */
 function handleCors(req, res) {
@@ -112,6 +130,7 @@ module.exports = {
   CORS_HEADERS,
   VALID_KEYS,
   checkAuth,
+  checkSetupAuth,
   handleCors,
   sendPaginated,
   sendJson,
