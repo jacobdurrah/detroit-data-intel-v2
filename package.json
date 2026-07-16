@@ -10,6 +10,7 @@
     "dev": "vercel dev",
     "build": "vercel build",
     "test": "npx playwright test",
+    "test:router": "node --test tests/router.node.test.js",
     "test:ui": "npx playwright test --ui"
   },
   "dependencies": {
