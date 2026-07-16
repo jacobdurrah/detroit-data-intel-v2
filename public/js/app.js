@@ -360,13 +360,13 @@
             }
             break;
           case 'investors':
-            if (window.InvestorsModule && window.InvestorsModule.showDetail) {
-              window.InvestorsModule.showDetail(id);
+            if (window.InvestorsModule && window.InvestorsModule.showInvestorDetail) {
+              window.InvestorsModule.showInvestorDetail(id);
             }
             break;
           case 'neighborhoods':
-            if (window.NeighborhoodsModule && window.NeighborhoodsModule.showDetail) {
-              window.NeighborhoodsModule.showDetail(id);
+            if (window.NeighborhoodsModule && window.NeighborhoodsModule.showNeighborhoodDetail) {
+              window.NeighborhoodsModule.showNeighborhoodDetail(id);
             }
             break;
         }
@@ -407,9 +407,10 @@
     var route = getHashRoute();
     var startTab = route.tab || 'map';
 
-    // Init map if it's the default (or if hash says map)
-    state.loadedTabs[startTab] = true;
+    // The active tab starts as map, so initialize it directly. Other tabs
+    // are initialized by switchTab while handling the initial route.
     if (startTab === 'map') {
+      state.loadedTabs.map = true;
       if (window.MapModule) window.MapModule.init();
     }
 
