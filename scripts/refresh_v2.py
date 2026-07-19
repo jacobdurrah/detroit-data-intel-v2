@@ -343,6 +343,13 @@ def transform_csv(name, source_path, data_dir=DATA_DIR):
             if csv_col in csv_headers:
                 mapped.append((csv_col, pg_col))
 
+        # Blocks reads ticket_issued_date, while existing consumers use
+        # violation_date. Preserve both from the source's single date field.
+        if name == "blight" and "Ticket Issued Date" in csv_headers:
+            mapped_columns = [pg_col for _, pg_col in mapped]
+            if "ticket_issued_date" not in mapped_columns:
+                mapped.append(("Ticket Issued Date", "ticket_issued_date"))
+
         if not mapped:
             print(f"  [{name}] ❌ No CSV columns matched mapping. CSV headers: {csv_headers[:10]}")
             return None, []
@@ -374,7 +381,7 @@ def transform_csv(name, source_path, data_dir=DATA_DIR):
 
 def load_table_psql(name, csv_path, pg_columns):
     """Load a transformed CSV into Supabase via psql COPY.
-    Strategy: Create temp table → COPY into temp → INSERT ... ON CONFLICT.
+    Strategy: transactionally replace a complete dataset.
     """
     pk = PRIMARY_KEYS.get(name)
     if not pk:
@@ -384,13 +391,36 @@ def load_table_psql(name, csv_path, pg_columns):
     cols_str = ", ".join(pg_columns)
     force_null = ", ".join(pg_columns)
 
-    # TRUNCATE + COPY — full table replace
-    # This is the fastest approach for monthly refreshes where we get complete datasets
-    # Uses SET statement_timeout to avoid Supabase's default 2-min limit
+    post_copy_sql = ""
+    if name == "sales":
+        # TRUNCATE removes every derived street_id. Restore the linkage in the
+        # same transaction so Blocks never observes an unlinked sales table.
+        post_copy_sql = """
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS street_id INTEGER;
+UPDATE sales s
+SET street_id = asm.street_id
+FROM address_street_map asm
+WHERE UPPER(TRIM(s.address)) = UPPER(TRIM(asm.street_number || ' ' || asm.street_name))
+  AND s.street_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sales_street_id ON sales(street_id);
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM sales)
+       AND NOT EXISTS (SELECT 1 FROM sales WHERE street_id IS NOT NULL) THEN
+        RAISE EXCEPTION 'sales refresh produced no street_id links';
+    END IF;
+END
+$$;
+"""
+
+    # Keep the destructive replace and derived-field restoration in one
+    # transaction. ON_ERROR_STOP makes psql roll everything back on failure.
     sql = f"""
 SET statement_timeout = '600000';
+BEGIN;
 TRUNCATE {name};
 \\copy {name} ({cols_str}) FROM '{csv_path}' WITH (FORMAT csv, HEADER true, NULL '', FORCE_NULL ({force_null}))
+{post_copy_sql}COMMIT;
 """
 
     print(f"  [{name}] Loading via TRUNCATE + COPY...", flush=True)
