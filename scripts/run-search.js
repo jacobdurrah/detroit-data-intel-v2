@@ -412,7 +412,9 @@ async function learnFromFeedback() {
 
 /* ---- Neighborhood Median Update ---- */
 
-async function updateMedians() {
+async function updateMedians(client, neighborhoods) {
+  client = client || supabase;
+  neighborhoods = neighborhoods || ALL_NEIGHBORHOODS;
   console.log('Updating neighborhood medians from recent sales...');
   var oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -422,9 +424,10 @@ async function updateMedians() {
   var page = 0;
   var hasMore = true;
   while (hasMore && page < 20) {
-    var { data: batch } = await supabase.from('sales').select('neighborhood, sale_price, zip')
+    var { data: batch, error } = await client.from('sales').select('neighborhood, sale_price, zip_code')
       .gte('sale_date', cutoff).gt('sale_price', 10000)
       .range(page * 1000, (page + 1) * 1000 - 1);
+    if (error) throw new Error('Median refresh failed: ' + error.message);
     if (batch && batch.length > 0) { allSales = allSales.concat(batch); hasMore = batch.length === 1000; page++; }
     else hasMore = false;
   }
@@ -433,9 +436,10 @@ async function updateMedians() {
   var zipSales = {};
   allSales.forEach(s => {
     var price = Number(s.sale_price);
-    if (price > 0 && s.zip) {
-      if (!zipSales[s.zip]) zipSales[s.zip] = [];
-      zipSales[s.zip].push(price);
+    var zip = s.zip_code ? String(s.zip_code).trim() : '';
+    if (price > 0 && zip) {
+      if (!zipSales[zip]) zipSales[zip] = [];
+      zipSales[zip].push(price);
     }
   });
   
@@ -451,7 +455,7 @@ async function updateMedians() {
   console.log('  Medians for ' + Object.keys(zipMedians).length + ' zip codes');
   
   // Update neighborhood medians with real data
-  ALL_NEIGHBORHOODS.forEach(n => {
+  neighborhoods.forEach(n => {
     var realMedians = n.zips.map(z => zipMedians[z]).filter(Boolean);
     if (realMedians.length > 0) {
       n.median = Math.round(realMedians.reduce((a, b) => a + b) / realMedians.length);
@@ -459,6 +463,13 @@ async function updateMedians() {
   });
   
   return zipMedians;
+}
+
+function markSeenListings(seenMap, listings, timestamp) {
+  listings.forEach(l => {
+    if (l.address) seenMap[l.address] = timestamp;
+  });
+  return seenMap;
 }
 
 /* ---- Permit check from Supabase ---- */
@@ -503,10 +514,6 @@ async function run() {
   var seenCount = Object.keys(seenMap).length;
   var newListings = allListings.filter(l => !seenMap[l.address]);
   console.log('Seen: ' + seenCount + ' | New: ' + newListings.length + ' of ' + allListings.length);
-  
-  // Mark ALL fetched listings as seen NOW (even outside target/price — never re-check)
-  var now = Date.now();
-  allListings.forEach(l => { seenMap[l.address] = now; });
   
   // 3. Filter new listings to target neighborhoods
   var inTarget = newListings.filter(l => TARGET_ZIPS.has(l.zip));
@@ -650,9 +657,10 @@ async function run() {
     summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
     report_data: report,
   });
-  if (reportError) console.log('Report store error: ' + reportError.message);
+  if (reportError) throw new Error('Report store failed: ' + reportError.message);
   
-  // Persist the seen hashmap (all 1000 listings marked seen at step 2)
+  // Persist only evaluated listings after the report is safely stored.
+  markSeenListings(seenMap, inRange, Date.now());
   saveSeenAddresses(seenMap);
   console.log('Seen addresses saved: ' + Object.keys(seenMap).length + ' total');
   
@@ -673,7 +681,14 @@ async function run() {
   return report;
 }
 
-run().catch(err => {
-  console.error('Failed:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch(err => {
+    console.error('Failed:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  updateMedians,
+  markSeenListings,
+};
