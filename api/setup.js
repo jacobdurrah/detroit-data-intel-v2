@@ -1,16 +1,36 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
 
+function getBearerToken(req) {
+  var header = req.headers && (req.headers.authorization || req.headers.Authorization);
+  if (!header || typeof header !== 'string') return null;
+
+  var match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : null;
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
-    return sendError(res, 'POST with { db_url } required', 405);
+    return sendError(res, 'POST required', 405);
   }
 
-  var body = req.body || {};
-  var dbUrl = body.db_url || process.env.DATABASE_URL;
+  var setupApiKey = process.env.SETUP_API_KEY;
+  if (!setupApiKey) {
+    return sendError(res, 'SETUP_API_KEY is not configured', 500);
+  }
+
+  var bearerToken = getBearerToken(req);
+  if (!bearerToken) {
+    return sendError(res, 'Authorization bearer token required', 401);
+  }
+  if (bearerToken !== setupApiKey) {
+    return sendError(res, 'Invalid setup credentials', 403);
+  }
+
+  var dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
-    return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
+    return sendError(res, 'DATABASE_URL is required (Supabase pooler connection string)', 500);
   }
 
   try {
