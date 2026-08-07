@@ -1,5 +1,6 @@
 const { handleCors, checkAuth, sendJson, sendError } = require('./_helpers');
 const { supabase } = require('./_supabase');
+const { parseStreetAddress } = require('./_address');
 
 const SCHEMA_DESCRIPTION = `You are a Detroit real estate data analyst with access to a Supabase PostgreSQL database containing 2M+ records.
 
@@ -123,10 +124,17 @@ function classifyKeyword(question) {
   const addressMatch = q.match(/(\d+\s+[a-z]+(?:\s+[a-z]+)?(?:\s+(?:st|ave|blvd|rd|dr|ct|pl|ln|way))?)/i);
   if (addressMatch) {
     const addr = addressMatch[1].toUpperCase();
+    const parsed = parseStreetAddress(addr);
+    const blightFilters = parsed
+      ? [
+          { column: 'street_number', op: 'eq', value: parsed.streetNumber },
+          { column: 'street_name', op: 'ilike', value: parsed.streetName + '%' },
+        ]
+      : [{ column: 'street_name', op: 'ilike', value: `%${addr.split(' ').slice(1).join(' ')}%` }];
     queries.push(
       { table: 'sales', select: 'address, sale_price, sale_date, grantee, grantor, neighborhood, parcel_id', filters: [{ column: 'address', op: 'ilike', value: `%${addr}%` }], order: { column: 'sale_date', ascending: false }, limit: 10 },
       { table: 'assessment', select: 'address, total_assessed_value, total_taxable_value, year_built, bedrooms, owner_name, neighborhood, property_class', filters: [{ column: 'address', op: 'ilike', value: `%${addr}%` }], limit: 5 },
-      { table: 'blight', select: 'street_number, street_name, violation_description, fine_amount, balance_due, payment_status, ticket_issued_date', filters: [{ column: 'street_name', op: 'ilike', value: `%${addr.split(' ').slice(1).join(' ')}%` }], order: { column: 'ticket_issued_date', ascending: false }, limit: 10 },
+      { table: 'blight', select: 'street_number, street_name, violation_description, fine_amount, balance_due, payment_status, ticket_issued_date', filters: blightFilters, order: { column: 'ticket_issued_date', ascending: false }, limit: 10 },
       { table: 'permits', select: 'address, permit_type, description, permit_issued, estimated_cost, contractor_name', filters: [{ column: 'address', op: 'ilike', value: `%${addr}%` }], order: { column: 'permit_issued', ascending: false }, limit: 10 },
       { table: 'trades', select: 'address, permit_type, description, permit_issued, contractor_name', filters: [{ column: 'address', op: 'ilike', value: `%${addr}%` }], order: { column: 'permit_issued', ascending: false }, limit: 10 },
     );
