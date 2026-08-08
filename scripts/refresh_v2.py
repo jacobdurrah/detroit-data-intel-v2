@@ -138,17 +138,18 @@ COLUMN_MAPS = {
         "Latitude": "latitude",
     },
     "trades": {
-        "record_id": "permit_no",
-        "address": "address",
-        "issued_date": "permit_issued",
-        "permit_type": "permit_type",
-        "work_description": "description",
-        "contact_business_name": "contractor_name",
-        "parcel_id": "parcel_id",
-        "neighborhood": "neighborhood",
-        "council_district": "council_district",
-        "longitude": "longitude",
-        "latitude": "latitude",
+        # Live Detroit CSV export uses Title Case headers (not snake_case)
+        "Record ID": "permit_no",
+        "Address": "address",
+        "Issued Date": "permit_issued",
+        "Permit Type": "permit_type",
+        "Work Description": "description",
+        "Contact Business Name": "contractor_name",
+        "Parcel ID": "parcel_id",
+        "Neighborhood": "neighborhood",
+        "Council District": "council_district",
+        "Longitude": "longitude",
+        "Latitude": "latitude",
     },
     "assessment": {
         "Parcel Number": "parcel_id",
@@ -184,26 +185,28 @@ COLUMN_MAPS = {
         "Latitude": "latitude",
     },
     "rentals": {
-        "record_id": "certificate_number",
-        "registration_type": "status",
-        "address": "address",
-        "parcel_id": "parcel_id",
-        "neighborhood": "neighborhood",
-        "council_district": "council_district",
-        "zip_code": "zip_code",
-        "longitude": "longitude",
-        "latitude": "latitude",
+        # Live Detroit CSV export uses Title Case headers (not snake_case)
+        "Record ID": "certificate_number",
+        "Registration Type": "status",
+        "Address": "address",
+        "Parcel ID": "parcel_id",
+        "Neighborhood": "neighborhood",
+        "Council District": "council_district",
+        "ZIP Code": "zip_code",
+        "Longitude": "longitude",
+        "Latitude": "latitude",
     },
     "presale": {
-        "inspection_id": "case_id",
-        "address": "address",
-        "inspection_result": "status",
-        "parcel_id": "parcel_id",
-        "inspection_type": "case_type",
-        "neighborhood": "neighborhood",
-        "council_district": "council_district",
-        "longitude": "longitude",
-        "latitude": "latitude",
+        # Live Detroit CSV export uses Title Case headers (not snake_case)
+        "Inspection ID": "case_id",
+        "Address": "address",
+        "Inspection Result": "status",
+        "Parcel ID": "parcel_id",
+        "Inspection Type": "case_type",
+        "Neighborhood": "neighborhood",
+        "Council District": "council_district",
+        "Longitude": "longitude",
+        "Latitude": "latitude",
     },
     "vacant": {
         "task_id": "task_id",
@@ -218,17 +221,17 @@ COLUMN_MAPS = {
         "Latitude": "latitude",
     },
     "dlba_auction": {
+        # Live export renamed Sale Date/Price and lowercases lon/lat; Buyer is no longer published
         "ObjectId": "object_id",
         "Address": "address",
         "Parcel ID": "parcel_id",
-        "Sale Date": "sale_date",
-        "Sale Price": "sale_price",
-        "Buyer": "buyer",
+        "Closing Date": "sale_date",
+        "Final Sale Price": "sale_price",
         "Neighborhood": "neighborhood",
         "Council District": "council_district",
         "Zip Code": "zip_code",
-        "Longitude": "longitude",
-        "Latitude": "latitude",
+        "longitude": "longitude",
+        "latitude": "latitude",
     },
     "dlba_owned": {
         "Parcel Number": "parcel_id",
@@ -347,7 +350,22 @@ def transform_csv(name, source_path, data_dir=DATA_DIR):
             print(f"  [{name}] ❌ No CSV columns matched mapping. CSV headers: {csv_headers[:10]}")
             return None, []
 
+        # Fail closed on partial header drift. A few matched columns used to proceed
+        # to TRUNCATE+COPY and reload an incomplete table (silent field loss).
+        min_matches = max(1, int(len(col_map) * 0.8))
+        if len(mapped) < min_matches:
+            missing = [c for c in col_map if c not in csv_headers]
+            print(
+                f"  [{name}] ❌ Incomplete CSV mapping ({len(mapped)}/{len(col_map)} matched; "
+                f"need ≥{min_matches}). Missing: {missing[:8]}. CSV headers: {csv_headers[:10]}"
+            )
+            return None, []
+
+        pk = PRIMARY_KEYS.get(name)
         pg_columns = [pg_col for _, pg_col in mapped]
+        if pk and pk not in pg_columns:
+            print(f"  [{name}] ❌ Primary key column '{pk}' not present after mapping — refusing load")
+            return None, []
 
         with open(output_path, "w", newline="", encoding="utf-8") as outfile:
             writer = csv_mod.writer(outfile)
