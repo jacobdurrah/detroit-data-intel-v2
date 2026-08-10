@@ -1,10 +1,27 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
 
+function getBearerToken(req) {
+  var header = req.headers && req.headers.authorization;
+  if (!header) return null;
+  var match = String(header).match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : null;
+}
+
+function isAuthorized(req) {
+  var expected = process.env.SETUP_SECRET;
+  if (!expected) return false;
+  return getBearerToken(req) === expected;
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
     return sendError(res, 'POST with { db_url } required', 405);
+  }
+
+  if (!isAuthorized(req)) {
+    return sendError(res, 'Unauthorized', 403);
   }
 
   var body = req.body || {};
