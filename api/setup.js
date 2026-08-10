@@ -1,5 +1,14 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
 
+function isAuthorizedSetup(req, body) {
+  const secret = process.env.SETUP_SECRET || process.env.ADMIN_API_TOKEN;
+  if (!secret) return process.env.NODE_ENV !== 'production';
+
+  const auth = req.headers.authorization || '';
+  const bearer = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : null;
+  return bearer === secret || body.setup_secret === secret || (req.query || {}).setup_secret === secret;
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
@@ -8,6 +17,10 @@ module.exports = async (req, res) => {
   }
 
   var body = req.body || {};
+  if (!isAuthorizedSetup(req, body)) {
+    return sendError(res, 'setup authorization required', 403);
+  }
+
   var dbUrl = body.db_url || process.env.DATABASE_URL;
   if (!dbUrl) {
     return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
