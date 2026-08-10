@@ -1,10 +1,23 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
 
+function setupAuthorized(req) {
+  const expected = process.env.SETUP_SECRET;
+  if (!expected) return false;
+
+  const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  return token === expected;
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
   if (req.method !== 'POST') {
     return sendError(res, 'POST with { db_url } required', 405);
+  }
+
+  if (!setupAuthorized(req)) {
+    return sendError(res, 'Unauthorized', 403);
   }
 
   var body = req.body || {};
