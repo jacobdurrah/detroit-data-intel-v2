@@ -1,4 +1,30 @@
+const crypto = require('crypto');
 const { handleCors, sendJson, sendError } = require('./_helpers');
+
+function getSetupToken(req, body) {
+  const headers = req.headers || {};
+  const authHeader = headers.authorization || headers.Authorization || '';
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+
+  return headers['x-setup-key'] ||
+    (req.query && req.query.key) ||
+    (body && (body.setup_key || body.key)) ||
+    '';
+}
+
+function hasValidSetupToken(req, body) {
+  const expected = process.env.SETUP_SECRET;
+  const provided = getSetupToken(req, body);
+
+  if (!expected || !provided) return false;
+
+  const expectedBuffer = Buffer.from(expected);
+  const providedBuffer = Buffer.from(provided);
+  return expectedBuffer.length === providedBuffer.length &&
+    crypto.timingSafeEqual(expectedBuffer, providedBuffer);
+}
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
@@ -8,6 +34,10 @@ module.exports = async (req, res) => {
   }
 
   var body = req.body || {};
+  if (!hasValidSetupToken(req, body)) {
+    return sendError(res, 'Unauthorized', 403);
+  }
+
   var dbUrl = body.db_url || process.env.DATABASE_URL;
   if (!dbUrl) {
     return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
