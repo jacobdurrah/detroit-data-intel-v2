@@ -1,13 +1,24 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
 
+function getSetupSecret(req, body) {
+  var headers = req.headers || {};
+  var query = req.query || {};
+  return headers['x-setup-secret'] || query.key || body.key || '';
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
+
+  var body = req.body || {};
+  var expectedSecret = process.env.SETUP_SECRET;
+  if (!expectedSecret || getSetupSecret(req, body) !== expectedSecret) {
+    return sendError(res, 'Unauthorized', 403);
+  }
 
   if (req.method !== 'POST') {
     return sendError(res, 'POST with { db_url } required', 405);
   }
 
-  var body = req.body || {};
   var dbUrl = body.db_url || process.env.DATABASE_URL;
   if (!dbUrl) {
     return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
