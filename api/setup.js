@@ -1,4 +1,20 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
+const crypto = require('crypto');
+
+function timingSafeEqual(a, b) {
+  var left = Buffer.from(String(a || ''));
+  var right = Buffer.from(String(b || ''));
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+function submittedSetupSecret(req, body) {
+  var auth = req.headers.authorization || '';
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    return auth.slice(7).trim();
+  }
+  return req.headers['x-setup-secret'] || (req.query && req.query.key) || body.setup_secret;
+}
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
@@ -8,6 +24,14 @@ module.exports = async (req, res) => {
   }
 
   var body = req.body || {};
+  var setupSecret = process.env.SETUP_SECRET;
+  if (!setupSecret) {
+    return sendError(res, 'Setup endpoint is disabled until SETUP_SECRET is configured', 403);
+  }
+  if (!timingSafeEqual(submittedSetupSecret(req, body), setupSecret)) {
+    return sendError(res, 'Unauthorized', 403);
+  }
+
   var dbUrl = body.db_url || process.env.DATABASE_URL;
   if (!dbUrl) {
     return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
