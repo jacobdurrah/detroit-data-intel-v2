@@ -1,4 +1,25 @@
+const crypto = require('crypto');
 const { handleCors, sendJson, sendError } = require('./_helpers');
+
+function timingSafeEqual(a, b) {
+  if (!a || !b) return false;
+
+  const aBuf = Buffer.from(String(a));
+  const bBuf = Buffer.from(String(b));
+  return aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function getProvidedSetupKey(req, body) {
+  const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    return auth.slice(7).trim();
+  }
+
+  if (req.query && req.query.key) return req.query.key;
+  if (body && body.setup_key) return body.setup_key;
+  if (body && body.key) return body.key;
+  return null;
+}
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
@@ -8,6 +29,11 @@ module.exports = async (req, res) => {
   }
 
   var body = req.body || {};
+  var setupSecret = process.env.SETUP_SECRET || process.env.SETUP_KEY || process.env.SETUP_TOKEN;
+  if (!setupSecret || !timingSafeEqual(getProvidedSetupKey(req, body), setupSecret)) {
+    return sendError(res, 'unauthorized', 403);
+  }
+
   var dbUrl = body.db_url || process.env.DATABASE_URL;
   if (!dbUrl) {
     return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
