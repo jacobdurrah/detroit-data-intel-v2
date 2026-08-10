@@ -12,8 +12,8 @@ const fs = require('fs');
 const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vgtwkgckvryxbgujnqro.supabase.co';
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY;
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = SERVICE_KEY ? createClient(SUPABASE_URL, SERVICE_KEY) : null;
 // Use ET date so report date matches Jacob's local time
 const TODAY = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Detroit' })).toISOString().slice(0, 10);
 
@@ -492,6 +492,10 @@ async function checkPermits(addresses) {
 /* ---- Main Pipeline ---- */
 
 async function run() {
+  if (!SERVICE_KEY) {
+    throw new Error('SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY is required');
+  }
+
   console.log('=== Dusty Turnkey Intelligence Report — ' + TODAY + ' ===\n');
   
   // 1. Fetch all listings
@@ -504,7 +508,7 @@ async function run() {
   var newListings = allListings.filter(l => !seenMap[l.address]);
   console.log('Seen: ' + seenCount + ' | New: ' + newListings.length + ' of ' + allListings.length);
   
-  // Mark ALL fetched listings as seen NOW (even outside target/price — never re-check)
+  // Stage ALL fetched listings as seen; persist this map only after database writes succeed.
   var now = Date.now();
   allListings.forEach(l => { seenMap[l.address] = now; });
   
@@ -612,6 +616,7 @@ async function run() {
   
   // 10. Store in Supabase
   // Store each property in property_searches
+  var storeErrors = [];
   for (var j = 0; j < report.properties.length; j++) {
     var prop = report.properties[j];
     var row = {
@@ -639,7 +644,10 @@ async function run() {
     
     var { error } = await supabase.from('property_searches')
       .upsert(row, { onConflict: 'address,search_date', ignoreDuplicates: true });
-    if (error) console.log('  Store error for ' + prop.address + ': ' + error.message);
+    if (error) {
+      console.log('  Store error for ' + prop.address + ': ' + error.message);
+      storeErrors.push(prop.address + ': ' + error.message);
+    }
   }
   
   // Store the full report as a property_report
@@ -650,9 +658,16 @@ async function run() {
     summary: 'Dusty Turnkey Report — ' + TODAY + ' — ' + report.properties.length + ' properties graded',
     report_data: report,
   });
-  if (reportError) console.log('Report store error: ' + reportError.message);
+  if (reportError) {
+    console.log('Report store error: ' + reportError.message);
+    storeErrors.push('daily report: ' + reportError.message);
+  }
+
+  if (storeErrors.length > 0) {
+    throw new Error('Supabase persistence failed; seen addresses were not saved. ' + storeErrors.join(' | '));
+  }
   
-  // Persist the seen hashmap (all 1000 listings marked seen at step 2)
+  // Persist the seen hashmap only after every database write succeeds.
   saveSeenAddresses(seenMap);
   console.log('Seen addresses saved: ' + Object.keys(seenMap).length + ' total');
   

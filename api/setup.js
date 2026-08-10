@@ -1,5 +1,13 @@
 const { handleCors, sendJson, sendError } = require('./_helpers');
 
+function getProvidedSetupKey(req) {
+  var auth = req.headers && (req.headers.authorization || req.headers.Authorization);
+  if (auth && auth.indexOf('Bearer ') === 0) return auth.slice('Bearer '.length);
+  if (req.query && req.query.key) return req.query.key;
+  if (req.body && req.body.key) return req.body.key;
+  return null;
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
 
@@ -8,6 +16,11 @@ module.exports = async (req, res) => {
   }
 
   var body = req.body || {};
+  var expectedSetupKey = process.env.SETUP_KEY;
+  if (!expectedSetupKey || getProvidedSetupKey(req) !== expectedSetupKey) {
+    return sendError(res, 'unauthorized', 403);
+  }
+
   var dbUrl = body.db_url || process.env.DATABASE_URL;
   if (!dbUrl) {
     return sendError(res, 'db_url is required (Supabase pooler connection string)', 400);
