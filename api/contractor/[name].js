@@ -12,16 +12,25 @@ module.exports = async (req, res) => {
     const decoded = decodeURIComponent(name);
     const pattern = `%${decoded}%`;
 
-    const [permitsRes, tradesRes] = await Promise.all([
+    // Limited rows are for recent samples / derived specialty & neighborhood lists only.
+    // Exact counts must come from head:true count queries — never sample.length.
+    // High-volume contractors (e.g. DWSD / Randazzo / Flame Furnace) exceed .limit(200)
+    // on permits and trades; using sample length would hard-cap total_permits at ≤400.
+    const [permitsRes, tradesRes, permitsCountRes, tradesCountRes] = await Promise.all([
       supabase.from('permits').select('*').ilike('contractor_name', pattern).order('permit_issued', { ascending: false }).limit(200),
       supabase.from('trades').select('*').ilike('contractor_name', pattern).order('permit_issued', { ascending: false }).limit(200),
+      supabase.from('permits').select('*', { count: 'exact', head: true }).ilike('contractor_name', pattern),
+      supabase.from('trades').select('*', { count: 'exact', head: true }).ilike('contractor_name', pattern),
     ]);
 
     const permits = permitsRes.data || [];
     const trades = tradesRes.data || [];
     const all = [...permits, ...trades];
+    const permitsTotal = permitsCountRes.count || 0;
+    const tradesTotal = tradesCountRes.count || 0;
+    const totalPermits = permitsTotal + tradesTotal;
 
-    if (all.length === 0) return sendError(res, 'Contractor not found', 404);
+    if (totalPermits === 0 && all.length === 0) return sendError(res, 'Contractor not found', 404);
 
     const neighborhoods = {};
     const types = {};
@@ -46,7 +55,9 @@ module.exports = async (req, res) => {
     const nbSorted = Object.entries(neighborhoods).sort((a,b) => b[1]-a[1]);
     const typeSorted = Object.entries(types).sort((a,b) => b[1]-a[1]);
 
-    // Format trades for frontend
+    // Format trades for frontend — page within the recent sample window.
+    // meta.total uses the exact permit+trade count; pages stays sample-bounded
+    // so pagination does not invent empty pages beyond the sample.
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const start = (page - 1) * limit;
@@ -56,9 +67,9 @@ module.exports = async (req, res) => {
       data: {
         profile: {
           name: decoded,
-          total_permits: all.length,
-          building_permits: permits.length,
-          trade_permits: trades.length,
+          total_permits: totalPermits,
+          building_permits: permitsTotal,
+          trade_permits: tradesTotal,
           neighborhoods_served: nbSorted.length,
           unique_properties: uniqueAddrs.size,
           unique_owners: uniqueOwners.size,
@@ -74,7 +85,12 @@ module.exports = async (req, res) => {
           contractor: p.contractor_name,
         })),
       },
-      meta: { page, limit, pages: Math.ceil(all.length / limit), total: all.length },
+      meta: {
+        page,
+        limit,
+        pages: Math.max(1, Math.ceil(all.length / limit)),
+        total: totalPermits,
+      },
     });
   } catch (err) {
     console.error('Error in /api/contractor/[name]:', err);
