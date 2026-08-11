@@ -98,7 +98,11 @@
       var filters = getFilters();
       var data = await App.api('contractors', filters);
       var contractors = data.data || data.contractors || data || [];
-      var total = data.total || data.count || contractors.length;
+      // Prefer meta.total from the paginated API — never fall back to page length
+      // alone or pagination collapses to a single page of results.
+      var total = (data.meta && data.meta.total != null)
+        ? data.meta.total
+        : (data.total || data.count || contractors.length);
       totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
       if (!contractors.length) {
