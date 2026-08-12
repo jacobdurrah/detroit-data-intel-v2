@@ -13,6 +13,226 @@ function percentileRanks(arr, key) {
   }
 }
 
+function cutoffForTimeRange(timeRange) {
+  if (!timeRange || timeRange === 'all') return null;
+  const months = { '1y': 12, '2y': 24 }[timeRange] || 0;
+  if (months <= 0) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  return d.toISOString().split('T')[0];
+}
+
+/**
+ * PostgREST aggregate rows look like { neighborhood, count, avg_price }.
+ * Normalize count/avg field names across SDK response shapes.
+ */
+function readAggCount(row) {
+  if (row == null) return 0;
+  const n = row.count ?? row.total ?? row.cnt;
+  return Number(n) || 0;
+}
+
+function readAggAvgPrice(row) {
+  if (row == null) return 0;
+  const n = row.avg_price ?? row.avg ?? row.sale_price;
+  return Number(n) || 0;
+}
+
+/**
+ * Exact per-neighborhood aggregates via PostgREST group-by selects.
+ * Avoids silent truncation from PostgREST max-rows (often 1000) which made
+ * `.limit(50000)` raw-row scans return ~1000 rows total citywide.
+ */
+async function fetchExactNeighborhoodAggregates(cutoffDate) {
+  let salesQuery = supabase
+    .from('sales')
+    .select('neighborhood, count(), avg_price:sale_price.avg()')
+    .not('neighborhood', 'is', null);
+  let blightQuery = supabase
+    .from('blight')
+    .select('neighborhood, count()')
+    .not('neighborhood', 'is', null);
+  let permitsQuery = supabase
+    .from('permits')
+    .select('neighborhood, count()')
+    .not('neighborhood', 'is', null);
+  let demosQuery = supabase
+    .from('demos')
+    .select('neighborhood, count()')
+    .not('neighborhood', 'is', null);
+  let rentalsQuery = supabase
+    .from('rentals')
+    .select('neighborhood, count()')
+    .not('neighborhood', 'is', null);
+  let dlbaQuery = supabase
+    .from('dlba_owned')
+    .select('neighborhood, count()')
+    .not('neighborhood', 'is', null);
+
+  if (cutoffDate) {
+    salesQuery = salesQuery.gte('sale_date', cutoffDate);
+    blightQuery = blightQuery.gte('ticket_issued_date', cutoffDate);
+    permitsQuery = permitsQuery.gte('permit_issued', cutoffDate);
+    demosQuery = demosQuery.gte('permit_issued', cutoffDate);
+  }
+
+  const [salesRes, blightRes, permitsRes, demosRes, rentalsRes, dlbaRes] = await Promise.all([
+    salesQuery,
+    blightQuery,
+    permitsQuery,
+    demosQuery,
+    rentalsQuery,
+    dlbaQuery,
+  ]);
+
+  const errors = [salesRes, blightRes, permitsRes, demosRes, rentalsRes, dlbaRes]
+    .map((r) => r.error)
+    .filter(Boolean);
+  if (errors.length) {
+    const err = new Error(errors.map((e) => e.message || String(e)).join('; '));
+    err.aggregateErrors = errors;
+    throw err;
+  }
+
+  const nbStats = {};
+  const ensure = (nb) => {
+    if (!nbStats[nb]) {
+      nbStats[nb] = {
+        neighborhood: nb,
+        total_sales: 0,
+        median_price: 0,
+        total_blight: 0,
+        total_permits: 0,
+        total_rentals: 0,
+        total_demos: 0,
+        total_dlba: 0,
+      };
+    }
+  };
+
+  for (const row of salesRes.data || []) {
+    if (!row.neighborhood) continue;
+    ensure(row.neighborhood);
+    nbStats[row.neighborhood].total_sales = readAggCount(row);
+    // PostgREST has no percentile aggregate; avg is the best exact citywide
+    // price signal available without scanning every sale row.
+    nbStats[row.neighborhood].median_price = Math.round(readAggAvgPrice(row));
+  }
+  for (const row of blightRes.data || []) {
+    if (!row.neighborhood) continue;
+    ensure(row.neighborhood);
+    nbStats[row.neighborhood].total_blight = readAggCount(row);
+  }
+  for (const row of permitsRes.data || []) {
+    if (!row.neighborhood) continue;
+    ensure(row.neighborhood);
+    nbStats[row.neighborhood].total_permits = readAggCount(row);
+  }
+  for (const row of demosRes.data || []) {
+    if (!row.neighborhood) continue;
+    ensure(row.neighborhood);
+    nbStats[row.neighborhood].total_demos = readAggCount(row);
+  }
+  for (const row of rentalsRes.data || []) {
+    if (!row.neighborhood) continue;
+    ensure(row.neighborhood);
+    nbStats[row.neighborhood].total_rentals = readAggCount(row);
+  }
+  for (const row of dlbaRes.data || []) {
+    if (!row.neighborhood) continue;
+    ensure(row.neighborhood);
+    nbStats[row.neighborhood].total_dlba = readAggCount(row);
+  }
+
+  return nbStats;
+}
+
+/**
+ * All-time path via neighborhood_stats view (true median + exact counts).
+ * Returns null if the view is unavailable so callers can fall back.
+ */
+async function fetchFromNeighborhoodStatsView() {
+  const { data, error } = await supabase
+    .from('neighborhood_stats')
+    .select(
+      'neighborhood, total_sales, median_price, total_permits, total_blight, total_demos, total_rentals'
+    )
+    .limit(1000);
+
+  if (error) return null;
+  if (!data || !data.length) return null;
+
+  const nbStats = {};
+  for (const row of data) {
+    if (!row.neighborhood) continue;
+    nbStats[row.neighborhood] = {
+      neighborhood: row.neighborhood,
+      total_sales: Number(row.total_sales) || 0,
+      median_price: Math.round(Number(row.median_price) || 0),
+      total_blight: Number(row.total_blight) || 0,
+      total_permits: Number(row.total_permits) || 0,
+      total_rentals: Number(row.total_rentals) || 0,
+      total_demos: Number(row.total_demos) || 0,
+      total_dlba: 0,
+    };
+  }
+  return nbStats;
+}
+
+function scoreNeighborhoods(nbStats) {
+  const neighborhoods = Object.values(nbStats).map((nb) => ({
+    neighborhood: nb.neighborhood,
+    name: nb.neighborhood,
+    sales_count: nb.total_sales,
+    median_price: nb.median_price,
+    permits_count: nb.total_permits,
+    blight_count: nb.total_blight,
+    rentals_count: nb.total_rentals,
+    demos_count: nb.total_demos,
+    total_dlba: nb.total_dlba,
+  }));
+
+  percentileRanks(neighborhoods, 'sales_count');
+  percentileRanks(neighborhoods, 'median_price');
+  percentileRanks(neighborhoods, 'permits_count');
+  percentileRanks(neighborhoods, 'blight_count');
+  percentileRanks(neighborhoods, 'rentals_count');
+  percentileRanks(neighborhoods, 'demos_count');
+
+  return neighborhoods.map((nb) => {
+    const sc = {
+      sales_volume_pct: nb.pct_sales_count || 0,
+      median_price_pct: nb.pct_median_price || 0,
+      permit_activity_pct: nb.pct_permits_count || 0,
+      blight_pct: nb.pct_blight_count || 0,
+      rental_pct: nb.pct_rentals_count || 0,
+      demo_pct: nb.pct_demos_count || 0,
+    };
+
+    const score = Math.round(
+      sc.sales_volume_pct * 25 +
+        sc.median_price_pct * 25 +
+        sc.permit_activity_pct * 20 +
+        (1 - sc.blight_pct) * 15 +
+        sc.rental_pct * 10 +
+        (1 - sc.demo_pct) * 5
+    );
+
+    delete nb.pct_sales_count;
+    delete nb.pct_median_price;
+    delete nb.pct_permits_count;
+    delete nb.pct_blight_count;
+    delete nb.pct_rentals_count;
+    delete nb.pct_demos_count;
+
+    return {
+      ...nb,
+      score,
+      score_components: sc,
+    };
+  }).sort((a, b) => b.score - a.score);
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
   if (checkAuth(req, res)) return;
@@ -26,142 +246,43 @@ module.exports = async (req, res) => {
       return sendJson(res, cacheMap[cacheKey].data);
     }
 
-    // Calculate cutoff date
-    let cutoffDate = null;
-    if (timeRange !== 'all') {
-      const months = { '1y': 12, '2y': 24 }[timeRange] || 0;
-      if (months > 0) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - months);
-        cutoffDate = d.toISOString().split('T')[0];
-      }
+    const cutoffDate = cutoffForTimeRange(timeRange);
+    let nbStats = null;
+    let source = 'aggregates';
+
+    // Prefer the SQL view for all-time (true median). Fall back to aggregates.
+    if (!cutoffDate) {
+      nbStats = await fetchFromNeighborhoodStatsView();
+      if (nbStats) source = 'neighborhood_stats';
     }
 
-    // Build queries with optional date filtering
-    let salesQuery = supabase.from('sales').select('neighborhood, sale_price').not('neighborhood', 'is', null).limit(50000);
-    let blightQuery = supabase.from('blight').select('neighborhood').not('neighborhood', 'is', null).limit(50000);
-    let permitsQuery = supabase.from('permits').select('neighborhood').not('neighborhood', 'is', null).limit(50000);
-    let demosQuery = supabase.from('demos').select('neighborhood').not('neighborhood', 'is', null).limit(20000);
-    let rentalsQuery = supabase.from('rentals').select('neighborhood').not('neighborhood', 'is', null).limit(40000);
-    let dlbaQuery = supabase.from('dlba_owned').select('neighborhood').not('neighborhood', 'is', null).limit(60000);
-
-    if (cutoffDate) {
-      salesQuery = salesQuery.gte('sale_date', cutoffDate);
-      blightQuery = blightQuery.gte('ticket_issued_date', cutoffDate);
-      permitsQuery = permitsQuery.gte('permit_issued', cutoffDate);
-      demosQuery = demosQuery.gte('permit_issued', cutoffDate);
+    if (!nbStats) {
+      nbStats = await fetchExactNeighborhoodAggregates(cutoffDate);
+      source = 'aggregates';
     }
 
-    const [salesRes, blightRes, permitsRes, demosRes, rentalsRes, dlbaRes] = await Promise.all([
-      salesQuery, blightQuery, permitsQuery, demosQuery, rentalsQuery, dlbaQuery,
-    ]);
-
-    const nbStats = {};
-    const ensure = (nb) => {
-      if (!nbStats[nb]) nbStats[nb] = {
-        neighborhood: nb, total_sales: 0, prices: [], total_blight: 0,
-        total_permits: 0, total_rentals: 0, total_demos: 0, total_dlba: 0,
-      };
+    const scored = scoreNeighborhoods(nbStats);
+    const result = {
+      data: scored,
+      meta: {
+        total: scored.length,
+        time_range: timeRange,
+        source,
+      },
     };
-
-    for (const s of (salesRes.data || [])) {
-      if (!s.neighborhood) continue;
-      ensure(s.neighborhood);
-      nbStats[s.neighborhood].total_sales++;
-      if (s.sale_price != null) nbStats[s.neighborhood].prices.push(s.sale_price);
-    }
-    for (const b of (blightRes.data || [])) {
-      if (!b.neighborhood) continue;
-      ensure(b.neighborhood);
-      nbStats[b.neighborhood].total_blight++;
-    }
-    for (const p of (permitsRes.data || [])) {
-      if (!p.neighborhood) continue;
-      ensure(p.neighborhood);
-      nbStats[p.neighborhood].total_permits++;
-    }
-    for (const d of (demosRes.data || [])) {
-      if (!d.neighborhood) continue;
-      ensure(d.neighborhood);
-      nbStats[d.neighborhood].total_demos++;
-    }
-    for (const r of (rentalsRes.data || [])) {
-      if (!r.neighborhood) continue;
-      ensure(r.neighborhood);
-      nbStats[r.neighborhood].total_rentals++;
-    }
-    for (const dl of (dlbaRes.data || [])) {
-      if (!dl.neighborhood) continue;
-      ensure(dl.neighborhood);
-      nbStats[dl.neighborhood].total_dlba++;
-    }
-
-    const neighborhoods = Object.values(nbStats).map(nb => {
-      const sorted = nb.prices.slice().sort((a, b) => a - b);
-      const medianPrice = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : 0;
-
-      return {
-        neighborhood: nb.neighborhood,
-        name: nb.neighborhood,
-        sales_count: nb.total_sales,
-        median_price: medianPrice,
-        permits_count: nb.total_permits,
-        blight_count: nb.total_blight,
-        rentals_count: nb.total_rentals,
-        demos_count: nb.total_demos,
-        total_dlba: nb.total_dlba,
-      };
-    });
-
-    // Calculate percentile-based components
-    percentileRanks(neighborhoods, 'sales_count');
-    percentileRanks(neighborhoods, 'median_price');
-    percentileRanks(neighborhoods, 'permits_count');
-    percentileRanks(neighborhoods, 'blight_count');
-    percentileRanks(neighborhoods, 'rentals_count');
-    percentileRanks(neighborhoods, 'demos_count');
-
-    // Calculate default score and attach score_components
-    const scored = neighborhoods.map(nb => {
-      const sc = {
-        sales_volume_pct: nb.pct_sales_count || 0,
-        median_price_pct: nb.pct_median_price || 0,
-        permit_activity_pct: nb.pct_permits_count || 0,
-        blight_pct: nb.pct_blight_count || 0,
-        rental_pct: nb.pct_rentals_count || 0,
-        demo_pct: nb.pct_demos_count || 0,
-      };
-
-      // Default score: weighted sum with blight and demos inverted
-      const score = Math.round(
-        sc.sales_volume_pct * 25 +
-        sc.median_price_pct * 25 +
-        sc.permit_activity_pct * 20 +
-        (1 - sc.blight_pct) * 15 +
-        sc.rental_pct * 10 +
-        (1 - sc.demo_pct) * 5
-      );
-
-      // Clean up temp pct_ fields
-      delete nb.pct_sales_count;
-      delete nb.pct_median_price;
-      delete nb.pct_permits_count;
-      delete nb.pct_blight_count;
-      delete nb.pct_rentals_count;
-      delete nb.pct_demos_count;
-
-      return {
-        ...nb,
-        score,
-        score_components: sc,
-      };
-    }).sort((a, b) => b.score - a.score);
-
-    const result = { data: scored, meta: { total: scored.length } };
     cacheMap[cacheKey] = { data: result, time: now };
     sendJson(res, result);
   } catch (err) {
     console.error('Error in /api/neighborhoods:', err);
     sendError(res, 'Internal server error');
   }
+};
+
+// Exported for unit tests
+module.exports._test = {
+  cutoffForTimeRange,
+  readAggCount,
+  readAggAvgPrice,
+  scoreNeighborhoods,
+  percentileRanks,
 };
