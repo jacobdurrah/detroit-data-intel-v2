@@ -114,7 +114,8 @@
       var filters = getFilters();
       var data = await App.api('sellers', filters);
       var sellers = data.data || data.sellers || data || [];
-      var total = data.total || data.count || sellers.length;
+      var meta = data.meta || {};
+      var total = meta.total != null ? meta.total : (data.total || data.count || sellers.length);
       totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
       if (!sellers.length) {
