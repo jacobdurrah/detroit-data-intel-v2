@@ -107,7 +107,8 @@
       var filters = getFilters();
       var data = await App.api('investors', filters);
       var investors = data.data || data.investors || data || [];
-      var total = data.total || data.count || investors.length;
+      var meta = data.meta || {};
+      var total = meta.total != null ? meta.total : (data.total || data.count || investors.length);
       totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
       if (!investors.length) {
