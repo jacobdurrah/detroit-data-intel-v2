@@ -111,9 +111,8 @@ test('lenders UI reads meta.total and sends page', () => {
 
 test('index.html sort option values are accepted by the API', () => {
   const html = loadJs('public/index.html');
-  const optionValues = [...html.matchAll(/id="lending-sort"[\s\S]*?<\/select>/)][0][0]
-    .match(/value="([^"]+)"/g)
-    .map((m) => m.slice(7, -1));
+  const select = html.match(/id="lending-sort"[\s\S]*?<\/select>/)[0];
+  const optionValues = [...select.matchAll(/value="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(optionValues, ['total_loans', 'total_volume', 'avg_rate', 'name']);
   const apiSrc = loadJs('api/lending.js');
   for (const value of optionValues) {
