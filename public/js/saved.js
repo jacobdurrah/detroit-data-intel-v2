@@ -65,18 +65,16 @@
     saveBtn.disabled = true;
 
     try {
-      var resp = await fetch('/api/saved-properties', {
+      var result = await App.api('saved-properties', {}, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           address: address,
           list_price: price ? Number(price) : null,
           neighborhood: neighborhood || null,
           status: 'researching',
           notes: 'Manually added — DD report requested'
-        })
+        }
       });
-      var result = await resp.json();
       if (result.error) throw new Error(result.error);
 
       document.getElementById('add-property-address').value = '';
@@ -327,10 +325,9 @@
 
   async function changeStatus(id, newStatus) {
     try {
-      await fetch('/api/saved-properties?id=' + id, {
+      await App.api('saved-properties', { id: id }, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+        body: { status: newStatus }
       });
       // Reload detail
       showDetail(id);
@@ -344,10 +341,9 @@
     if (!textarea) return;
 
     try {
-      await fetch('/api/saved-properties?id=' + id, {
+      await App.api('saved-properties', { id: id }, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: textarea.value })
+        body: { notes: textarea.value }
       });
       var btn = document.querySelector('.btn-save-notes[data-id="' + id + '"]');
       if (btn) {
