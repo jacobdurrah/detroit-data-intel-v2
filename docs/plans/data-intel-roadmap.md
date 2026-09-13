@@ -267,6 +267,40 @@ decision record in the Framework plan).
   **Enables:** scheduled, observable refreshes under the Framework 2.0 job
   architecture — no laptop required for data currency. — commit: _pending_
 
+### Phase R — Register of Deeds index API (SCHEDULED 2026-09-13 by the operator; shipped with the auction-2026 exits work)
+
+**What Phase R delivers (impact):** the Wayne County Register of Deeds index — every recorded deed, land contract,
+mortgage and foreclosure, current to the county's certification date (weeks fresher than the City's sales feed) — as
+an open JSON API and an MCP server, so Detroit Code AI, auction-2026 and any agent can ask "what has this investor
+done", "what happened to this parcel", or "who bought on land contract this month". Built from the auction-2026 #19
+research (2025 tax-auction exits), where the City's feed missed Treasurer deeds and months of recent resales.
+Cross-repo: jacobdurrah/auction-2026 PR (local harvest + discovery) ↔ this repo's PR.
+
+**Decision R-D1 (operator, 2026-09-13): use the quick search.** The Register's search service answers its quick
+search (Tax ID, address, name, document number) for the anonymous session, although the site's own UI offers it to
+Pay As You Go sessions. The operator directed that the API use it. Mechanics: behind `DEEDS_QUICK_SEARCH` (default
+on; "off" stops all quick searches and parcel lookups fall back to name searches on the City's recorded parties),
+with the same rate limit and caching as every other endpoint.
+
+- [x] **R1** Core client `api/_deeds.js`: the site's socket from plain Node (cookie GET → WebSocket, no browser),
+  one socket per warm instance, ≤3 upstream searches in flight, 30-minute result cache; advanced search (grantor /
+  grantee / party / doc_type / dates / sort / paging) and quick search (parcel / address / doc_number / q), with
+  names and doc_type as filters on a quick search; document-type groups; Tax ID ↔ City parcel id; normalised records.
+  Verify: `scripts/test-deeds.mjs` against local and preview.
+  **Enables:** every other R item, and the CLI. — commit: _pending_
+- [x] **R2** REST endpoints `api/deeds/{search,entity,parcel,doc-types,status,openapi}`: open, 60 requests/minute per
+  caller (429 + Retry-After), CDN cache headers, errors as JSON with 400/429/502. Verify: test script.
+  **Enables:** Detroit Code AI and any HTTP client. — commit: _pending_
+- [x] **R3** MCP server `api/mcp.js` (Streamable HTTP, stateless, JSON responses; tools deeds_search, deeds_entity,
+  deeds_parcel, deeds_doc_types). Verify: initialize, tools/list, tools/call incl. the error path.
+  **Enables:** agents discover and call it with one `claude mcp add`. — commit: _pending_
+- [x] **R4** Discovery: `public/llms.txt` (agent guide), `/api/deeds/openapi`, `scripts/deeds.mjs` (CLI, same code,
+  for bulk work), `scripts/serve-api.mjs` (run api/ locally without the Vercel CLI), `.mcp.json`.
+  **Enables:** a new agent finds the tool from the repo or the site in one read. — commit: _pending_
+- [ ] **R5** Detroit Code AI chat tool: a `register_of_deeds` tool in the zoning-ai chat route calling
+  /api/deeds/search and /entity (its own plan's gates apply). Verify: a production chat turn that answers "who owns
+  and what has changed on <parcel>" from the index. — commit: _pending_
+
 ---
 
 *Ledger created 2026-07-03 from the Detroit Code AI agentic-retrieval project's
