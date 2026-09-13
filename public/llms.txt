@@ -1,0 +1,59 @@
+# Detroit Data Intel — agent guide
+
+> Public-records lookups for Detroit and Wayne County, Michigan, as an open JSON API and an MCP server.
+> First source: the Wayne County Register of Deeds index — who conveyed what to whom, when, and by which document.
+
+Base URL: https://detroit-data-intel-v2.vercel.app
+MCP (Streamable HTTP): https://detroit-data-intel-v2.vercel.app/api/mcp
+  Claude Code: claude mcp add --transport http detroit-data https://detroit-data-intel-v2.vercel.app/api/mcp
+  Tools: deeds_search, deeds_entity, deeds_parcel, deeds_doc_types
+OpenAPI: /api/deeds/openapi
+No key. Rate limit: 60 requests a minute per caller (429 + Retry-After). Identical GETs are served from cache.
+For bulk work (hundreds of names), run the local CLI instead: node scripts/deeds.mjs (in the repo).
+
+## Register of Deeds (Wayne County, MI)
+
+Source: wayne.mi.publicsearch.us. Index data only: parties, document type, recorded and instrument dates, Tax ID
+(parcel), address and legal description, the consideration where the clerk entered one, a ~200-character OCR
+excerpt, and a link to the document page. No document images. The index is certified through a date given in every
+response (meta.certified_through) — documents recorded after it may be incomplete.
+
+### GET /api/deeds/search
+Direct lookups (one Register search per value; names and doc_type then filter the results):
+  parcel=14002261.            City of Detroit parcel id, or the Register's Tax ID 14/002261
+  address=4661 VANCOUVER      street address as the Register writes it (number + street, no suffix)
+  doc_number=2025304487       instrument number
+  q=...                       any text the Register's quick search accepts (a name, an address, a Tax ID)
+Searches (several names in one field are OR'd; grantor + grantee are AND'd):
+  grantor=TOBBY ADALBERTO     seller / mortgagor / land-contract vendor ("LAST FIRST" for people)
+  grantee=CRAFT ONE           buyer / lender / vendee
+  party=ASSET GUARD           either side (not with grantor/grantee)
+  doc_type=land_contracts     codes (WD, QCD, LCM, MTG, TQCD…), descriptions, or groups:
+                              deeds, land_contracts, mortgages, discharges, liens, treasurer, foreclosure
+Dates and paging:
+  from=2025-09-17 to=2026-08-10   recorded-date range (YYYY-MM-DD)
+  sort=recorded_desc|recorded_asc|relevance   limit=1..250 (50)   offset=N   all=true max=1000
+Filters on the results: municipality=DETROIT  min_consideration=  max_consideration=
+Names: LLC/INC words are dropped by default (the index spells LLC "L L C"); exact=true keeps them. Name matching is by
+words, so common personal names match other people — check parcels and counterparties before attributing.
+
+### GET /api/deeds/entity?name=ASSET GUARD&from=2023-01-01
+Everything one buyer/seller is party to, both sides: counts by document type and year, top counterparties, and per
+parcel: how it came in (e.g. Treasurer deed), how and when it went out (deed, land contract, mortgage), days held.
+
+### GET /api/deeds/parcel?parcel=14002261.
+Every document on one parcel, oldest first: tax foreclosure (TCOF/TJOF), Treasurer deed (TQCD), resales, land
+contracts (LCM), mortgages, liens.
+
+### GET /api/deeds/doc-types · GET /api/deeds/status
+
+### Reading the documents
+- TQCD "QUIT CLAIM DEED-WCTO" = Wayne County Treasurer's deed to a tax-auction buyer. TCOF/TJOF = foreclosure.
+- LCM "MEMO OF LAND CONTRACT" = sold on terms; consideration is usually 0 in the index (the price is in the image).
+- consideration is as keyed by the clerk: blank on many deeds, occasionally mis-keyed by a factor of ten.
+
+### Examples
+  /api/deeds/search?parcel=14002261.
+  /api/deeds/search?grantor=TOBBY%20ADALBERTO&doc_type=land_contracts&from=2025-09-17
+  /api/deeds/search?doc_type=TQCD&from=2025-10-01&to=2025-10-31&municipality=DETROIT&all=true
+  /api/deeds/entity?name=MARCUS%20JAMAR&from=2025-01-01

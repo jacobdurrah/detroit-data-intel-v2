@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "detroit-data": {
+      "type": "http",
+      "url": "https://detroit-data-intel-v2.vercel.app/api/mcp"
+    }
+  }
+}
