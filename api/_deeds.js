@@ -411,4 +411,7 @@ async function parcelHistory(params) {
   };
 }
 
-module.exports = { search, entity, parcelHistory, docTypes, certDate, toTaxId, toCityParcel, nameTerm, GROUPS, ROD };
+/** Close the socket — for scripts, so the process can exit (a warm serverless instance just keeps it). */
+function close() { if (conn) { try { conn.ws.close(); } catch { /* already closed */ } conn = null; } }
+
+module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, GROUPS, ROD };
