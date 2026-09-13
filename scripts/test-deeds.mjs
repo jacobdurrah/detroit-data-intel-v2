@@ -24,6 +24,8 @@ const pg = await get('/api/deeds/search?party=ASSET%20GUARD&from=2025-01-01&to=2
 ok('party, all pages', pg.j?.meta?.fetched === pg.j?.meta?.total && pg.j.meta.total > 100, `${pg.j?.meta?.fetched}/${pg.j?.meta?.total}`);
 const dt = await get('/api/deeds/search?doc_type=TQCD&from=2025-10-01&to=2025-10-31&municipality=DETROIT&limit=10');
 ok('doc_type + dates + municipality filter', dt.j?.meta?.total > 1000 && dt.j.data.every((d) => d.doc_type_code === 'TQCD' && /DETROIT/.test(d.municipality || '')), `${dt.j?.meta?.total} Treasurer deeds in Oct 2025`);
+const sub = await get('/api/deeds/search?parcel=33051042070000&from=2020-01-01');
+ok('suburban parcel id (14 digits) is the Tax ID as is', (sub.j?.data || []).some((d) => d.doc_type_code === 'TQCD' && d.parcels.some((x) => x.tax_id === '33051042070000')), `${sub.j?.meta?.matched} documents`);
 const addr = await get('/api/deeds/search?address=4661%20VANCOUVER&from=2025-01-01');
 ok('address lookup', (addr.j?.data || []).some((d) => d.parcels.some((x) => x.tax_id === '14/002261')));
 const bad = await get('/api/deeds/search?from=2025-01-01');

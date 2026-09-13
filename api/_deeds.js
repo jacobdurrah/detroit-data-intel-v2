@@ -127,12 +127,13 @@ function nameTerm(name, exact) {
   if (t.replace(/\s/g, '').length < 3) throw badRequest(`name "${name}" is too short to search`);
   return t;
 }
-/** "14/002261" ↔ City of Detroit "14002261." ; "20/013758.011" ↔ "20013758.011" ; "16/002903-4" ↔ "16002903-4". */
+/** "14/002261" ↔ City of Detroit "14002261." ; "20/013758.011" ↔ "20013758.011" ; "16/002903-4" ↔ "16002903-4".
+ *  Only Detroit's ward + 6-digit ids take the slash: the suburbs' 14-digit ids ("33051042070000") are the Tax ID as is. */
 function toTaxId(p) {
   const s = String(p).trim().toUpperCase();
   if (s.includes('/')) return s;
-  const core = s.replace(/\.$/, '');
-  return `${core.slice(0, 2)}/${core.slice(2)}`;
+  const m = s.match(/^(\d{2})(\d{6}(?:[.-][0-9A-Z]+)?)\.?$/);
+  return m ? `${m[1]}/${m[2]}` : s;
 }
 function toCityParcel(taxId) {
   const [ward, rest] = String(taxId).split('/');
@@ -410,4 +411,7 @@ async function parcelHistory(params) {
   };
 }
 
-module.exports = { search, entity, parcelHistory, docTypes, certDate, toTaxId, toCityParcel, nameTerm, GROUPS, ROD };
+/** Close the socket — for scripts, so the process can exit (a warm serverless instance just keeps it). */
+function close() { if (conn) { try { conn.ws.close(); } catch { /* already closed */ } conn = null; } }
+
+module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, GROUPS, ROD };

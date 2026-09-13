@@ -35,4 +35,4 @@ if (table && Array.isArray(out.data)) {
   for (const x of out.data) console.log([x.recorded_date, (x.doc_type_code || '').padEnd(5), (x.parcels || []).map((p) => p.tax_id).join(',').padEnd(14), (x.address || '').padEnd(22), `${(x.grantors || []).join('; ')} → ${(x.grantees || []).join('; ')}`, x.consideration ?? ''].join('  '));
   if (out.meta) console.log(`— ${out.meta.returned ?? out.data.length} of ${out.meta.total ?? '?'} · certified through ${out.meta.certified_through}`);
 } else console.log(JSON.stringify(out, null, 2));
-process.exit(0);
+if (!api) require('../api/_deeds.js').close();
