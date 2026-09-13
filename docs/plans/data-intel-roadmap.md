@@ -299,7 +299,8 @@ with the same rate limit and caching as every other endpoint.
   **Enables:** a new agent finds the tool from the repo or the site in one read. — commit: `081776a` (merge `a0c7443`, PR #44); production 21/21 `scripts/test-deeds.mjs` 2026-09-13
 - [ ] **R5** Detroit Code AI chat tool: a `register_of_deeds` tool in the zoning-ai chat route calling
   /api/deeds/search and /entity (its own plan's gates apply). Verify: a production chat turn that answers "who owns
-  and what has changed on <parcel>" from the index. — commit: _pending_
+  and what has changed on <parcel>" from the index. — in review: detroit-zoning-ai #48 (register-of-deeds-plan R1–R4
+  done, preview probe r2 PASS 4/4; gate RG is the operator's) — commit: _pending_
 
 ---
 
