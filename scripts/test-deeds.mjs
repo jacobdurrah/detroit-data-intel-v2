@@ -43,7 +43,8 @@ const oa = await get('/api/deeds/openapi');
 ok('OpenAPI 3.1 document', oa.j?.openapi === '3.1.0' && oa.j.paths['/api/deeds/search']);
 const llms = await fetch(`${BASE}/llms.txt`, { headers }); const lt = await llms.text();
 ok('llms.txt names the endpoints and MCP', llms.ok && /\/api\/deeds\/search/.test(lt) && /\/api\/mcp/.test(lt));
-ok('CORS open, cache headers set', st.h.get('access-control-allow-origin') === '*' && /s-maxage/.test(p.h.get('cache-control') || ''));
+// Locally the header carries s-maxage; on Vercel the CDN consumes it and answers x-vercel-cache instead.
+ok('CORS open, responses cacheable', st.h.get('access-control-allow-origin') === '*' && (/s-maxage/.test(p.h.get('cache-control') || '') || /HIT|MISS|STALE|PRERENDER/.test(p.h.get('x-vercel-cache') || '')), p.h.get('x-vercel-cache') || p.h.get('cache-control'));
 const init = await mcp('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test-deeds', version: '1' } });
 ok('MCP initialize', init.result?.serverInfo?.name === 'detroit-data', init.result?.protocolVersion);
 const tl = await mcp('tools/list', {}, 2);

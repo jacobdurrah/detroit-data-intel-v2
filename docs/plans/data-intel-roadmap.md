@@ -287,16 +287,16 @@ with the same rate limit and caching as every other endpoint.
   grantee / party / doc_type / dates / sort / paging) and quick search (parcel / address / doc_number / q), with
   names and doc_type as filters on a quick search; document-type groups; Tax ID ↔ City parcel id; normalised records.
   Verify: `scripts/test-deeds.mjs` against local and preview.
-  **Enables:** every other R item, and the CLI. — commit: _pending_
+  **Enables:** every other R item, and the CLI. — commit: `081776a` (merge `a0c7443`, PR #44)
 - [x] **R2** REST endpoints `api/deeds/{search,entity,parcel,doc-types,status,openapi}`: open, 60 requests/minute per
   caller (429 + Retry-After), CDN cache headers, errors as JSON with 400/429/502. Verify: test script.
-  **Enables:** Detroit Code AI and any HTTP client. — commit: _pending_
+  **Enables:** Detroit Code AI and any HTTP client. — commit: `081776a` (merge `a0c7443`, PR #44)
 - [x] **R3** MCP server `api/mcp.js` (Streamable HTTP, stateless, JSON responses; tools deeds_search, deeds_entity,
   deeds_parcel, deeds_doc_types). Verify: initialize, tools/list, tools/call incl. the error path.
-  **Enables:** agents discover and call it with one `claude mcp add`. — commit: _pending_
+  **Enables:** agents discover and call it with one `claude mcp add`. — commit: `081776a` (merge `a0c7443`, PR #44)
 - [x] **R4** Discovery: `public/llms.txt` (agent guide), `/api/deeds/openapi`, `scripts/deeds.mjs` (CLI, same code,
   for bulk work), `scripts/serve-api.mjs` (run api/ locally without the Vercel CLI), `.mcp.json`.
-  **Enables:** a new agent finds the tool from the repo or the site in one read. — commit: _pending_
+  **Enables:** a new agent finds the tool from the repo or the site in one read. — commit: `081776a` (merge `a0c7443`, PR #44); production 21/21 `scripts/test-deeds.mjs` 2026-09-13
 - [ ] **R5** Detroit Code AI chat tool: a `register_of_deeds` tool in the zoning-ai chat route calling
   /api/deeds/search and /entity (its own plan's gates apply). Verify: a production chat turn that answers "who owns
   and what has changed on <parcel>" from the index. — commit: _pending_
