@@ -38,7 +38,7 @@ const spec = {
       responses: { 200: { description: 'Results', content: { 'application/json': { schema: { type: 'object', properties: { meta: { type: 'object' }, data: { type: 'array', items: doc } } } } } },
                    400: { description: 'Bad query' }, 429: { description: 'Rate limited (see Retry-After)' }, 502: { description: 'Register of Deeds unreachable' } } } },
     '/api/deeds/entity': { get: { operationId: 'deedsEntity', summary: 'One buyer/seller, both sides',
-      description: 'Everything one entity is party to: summary by document type and year, top counterparties, and a per-parcel timeline (in, out, days held).',
+      description: 'Everything one entity is party to: summary by document type and year, top counterparties, and a per-parcel timeline (in, out, days held). Newest-first up to max; if meta.truncated, empty `out` is not still-held — see meta.holdings_complete.',
       parameters: [{ ...names('Entity name(s); variants OR\'d.'), name: 'name', required: true }, { ...names('Limit to document types.'), name: 'doc_type' }, ...common, q('max', 'Per side, up to 1500 (default 500)', { type: 'integer' })],
       responses: { 200: { description: 'Entity' } } } },
     '/api/deeds/parcel': { get: { operationId: 'deedsParcel', summary: 'Every document on one parcel',
