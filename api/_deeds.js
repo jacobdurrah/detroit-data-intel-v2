@@ -354,10 +354,17 @@ async function entity(params) {
     const firstIn = e.in[0], firstOut = e.out.find((o) => !firstIn || (o.date || '') >= (firstIn.date || ''));
     return { ...e, held_days: firstIn && firstOut ? Math.round((Date.parse(firstOut.date) - Date.parse(firstIn.date)) / 86_400_000) : null };
   }).sort((a, b) => (b.in[0]?.date || '').localeCompare(a.in[0]?.date || ''));
+  const grantorSide = side(out, 'grantees');
+  const granteeSide = side(inn, 'grantors');
+  const truncated = Boolean(grantorSide.truncated || granteeSide.truncated);
+  const note = 'Name searches are token matches: common personal names also match other people — check grantors/grantees and parcels before attributing.'
+    + (truncated
+      ? ' Results are newest-first and truncated at max; a parcel with no outbound document in this window is NOT known to be still held — do not treat empty `out` as current inventory.'
+      : '');
   return {
     meta: { source: out.meta.source, certified_through: out.meta.certified_through, names, terms: [...new Set(names.map((n) => nameTerm(n, bool(p.exact))))], from: out.meta.query.from, to: out.meta.query.to,
-            note: 'Name searches are token matches: common personal names also match other people — check grantors/grantees and parcels before attributing.' },
-    summary: { as_grantor: side(out, 'grantees'), as_grantee: side(inn, 'grantors'), parcels: parcels.length },
+            truncated, holdings_complete: !truncated, note },
+    summary: { as_grantor: grantorSide, as_grantee: granteeSide, parcels: parcels.length },
     parcels,
     documents: { as_grantor: out.data, as_grantee: inn.data },
   };
