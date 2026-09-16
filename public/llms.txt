@@ -39,7 +39,7 @@ words, so common personal names match other people — check parcels and counter
 
 ### GET /api/deeds/entity?name=ASSET GUARD&from=2023-01-01
 Everything one buyer/seller is party to, both sides: counts by document type and year, top counterparties, and per
-parcel: how it came in (e.g. Treasurer deed), how and when it went out (deed, land contract, mortgage), days held.
+parcel: how it came in (e.g. Treasurer deed), how and when title went out (deed or land contract — not a mortgage), days held.
 
 ### GET /api/deeds/parcel?parcel=14002261.
 Every document on one parcel, oldest first: tax foreclosure (TCOF/TJOF), Treasurer deed (TQCD), resales, land
