@@ -48,7 +48,7 @@ function server() {
   s.registerTool('deeds_entity', {
     title: 'Register of Deeds: one entity',
     description: 'Everything one buyer/seller (company or person) is party to, both sides: summary by document type and year, top counterparties, '
-      + 'and a per-parcel timeline (when it came in, when and how it went out, days held). Use it to study an investor\'s strategy.',
+      + 'and a per-parcel timeline (when title came in, when it was conveyed out by deed or land contract — mortgages are not a sale — days held). Use it to study an investor\'s strategy.',
     inputSchema: { name: names.describe('Entity name(s); variants are OR\'d'), doc_type: names.optional(), ...common, max: z.number().int().max(1500).optional() },
   }, async (a) => { try { return asText(await deeds.entity(a)); } catch (e) { return fail(e); } });
   s.registerTool('deeds_parcel', {

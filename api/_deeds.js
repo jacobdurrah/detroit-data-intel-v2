@@ -101,6 +101,11 @@ const GROUPS = {
   treasurer: (d) => /TREASURER|-WCTO\b/.test(d),       // WCTO = Wayne County Treasurer's Office (TQCD = its deed to an auction buyer)
   foreclosure: (d) => /FORFEITURE|FORECLOSURE/.test(d) && !/RELEASE/.test(d),
 };
+/** Title transfers only. A mortgage/discharge/assignment is financing — the borrower still owns the parcel. */
+function isConveyanceDoc(docType) {
+  const d = String(docType || '').toUpperCase();
+  return Boolean(d) && (GROUPS.deeds(d) || GROUPS.land_contracts(d));
+}
 async function resolveDocTypes(list) {
   if (!list.length) return [];
   const all = await docTypes();
@@ -342,12 +347,18 @@ async function entity(params) {
       first: r.data.map((d) => d.recorded_date).filter(Boolean).sort()[0] || null, last: r.data.map((d) => d.recorded_date).filter(Boolean).sort().at(-1) || null,
     };
   };
-  // Per parcel: when it came in, when it went out, and how.
+  // Per parcel: when title came in and when it went out. Mortgages stay in the
+  // side summaries but are not an "out" — Craft One's 12819 Pembroke was sold
+  // 2026-06-10 by warranty deed after a 2026-04-07 Kiavi mortgage; counting the
+  // mortgage as the exit hid the Campbells and listed still-owned houses as gone.
   const byParcel = new Map();
-  for (const [dir, r] of [['in', inn], ['out', out]]) for (const d of r.data) for (const x of d.parcels) {
-    const e = byParcel.get(x.tax_id) || { tax_id: x.tax_id, city_parcel_id: x.city_parcel_id, address: d.address, municipality: d.municipality, in: [], out: [] };
-    e[dir].push({ date: d.recorded_date, doc_type: d.doc_type, consideration: d.consideration, counterparties: dir === 'in' ? d.grantors : d.grantees, url: d.url });
-    byParcel.set(x.tax_id, e);
+  for (const [dir, r] of [['in', inn], ['out', out]]) for (const d of r.data) {
+    if (!isConveyanceDoc(d.doc_type)) continue;
+    for (const x of d.parcels) {
+      const e = byParcel.get(x.tax_id) || { tax_id: x.tax_id, city_parcel_id: x.city_parcel_id, address: d.address, municipality: d.municipality, in: [], out: [] };
+      e[dir].push({ date: d.recorded_date, doc_type: d.doc_type, consideration: d.consideration, counterparties: dir === 'in' ? d.grantors : d.grantees, url: d.url });
+      byParcel.set(x.tax_id, e);
+    }
   }
   const parcels = [...byParcel.values()].map((e) => {
     e.in.sort((a, b) => (a.date || '').localeCompare(b.date || '')); e.out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -414,4 +425,4 @@ async function parcelHistory(params) {
 /** Close the socket — for scripts, so the process can exit (a warm serverless instance just keeps it). */
 function close() { if (conn) { try { conn.ws.close(); } catch { /* already closed */ } conn = null; } }
 
-module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, GROUPS, ROD };
+module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, isConveyanceDoc, GROUPS, ROD };
