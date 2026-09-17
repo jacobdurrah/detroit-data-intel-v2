@@ -27,7 +27,7 @@ ok('doc_type + dates + municipality filter', dt.j?.meta?.total > 1000 && dt.j.da
 const sub = await get('/api/deeds/search?parcel=33051042070000&from=2020-01-01');
 ok('suburban parcel id (14 digits) is the Tax ID as is', (sub.j?.data || []).some((d) => d.doc_type_code === 'TQCD' && d.parcels.some((x) => x.tax_id === '33051042070000')), `${sub.j?.meta?.matched} documents`);
 const addr = await get('/api/deeds/search?address=4661%20VANCOUVER&from=2025-01-01');
-ok('address lookup', (addr.j?.data || []).some((d) => d.parcels.some((x) => x.tax_id === '14/002261')));
+ok('address lookup is this street, not a keyword hit', (addr.j?.data || []).length >= 1 && (addr.j.data || []).every((d) => d.parcels.some((x) => x.tax_id === '14/002261') && /4661 VANCOUVER/i.test(d.address || '')));
 const bad = await get('/api/deeds/search?from=2025-01-01');
 ok('no criteria → 400 with guidance', bad.status === 400 && /give at least one/.test(bad.j?.error || ''));
 const bad2 = await get('/api/deeds/search?grantor=X&doc_type=NOPE');

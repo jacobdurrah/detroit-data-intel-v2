@@ -21,7 +21,9 @@ response (meta.certified_through) — documents recorded after it may be incompl
 ### GET /api/deeds/search
 Direct lookups (one Register search per value; names and doc_type then filter the results):
   parcel=14002261.            City of Detroit parcel id, or the Register's Tax ID 14/002261
-  address=4661 VANCOUVER      street address as the Register writes it (number + street, no suffix)
+  address=4661 VANCOUVER      street address as the Register writes it (number + street, no suffix).
+                              The county search is a keyword match; hits that are not this address (other
+                              house numbers, OCR/book-page text) are dropped.
   doc_number=2025304487       instrument number
   q=...                       any text the Register's quick search accepts (a name, an address, a Tax ID)
 Searches (several names in one field are OR'd; grantor + grantee are AND'd):

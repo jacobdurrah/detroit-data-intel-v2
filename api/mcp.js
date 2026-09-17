@@ -27,7 +27,7 @@ function server() {
   });
   s.registerTool('deeds_search', {
     title: 'Search Register of Deeds',
-    description: 'Search the Wayne County Register of Deeds index. Direct lookups: parcel (Tax ID "14/002261" or City "14002261."), address ("4661 VANCOUVER"), doc_number, or q (any text). '
+    description: 'Search the Wayne County Register of Deeds index. Direct lookups: parcel (Tax ID "14/002261" or City "14002261."), address ("4661 VANCOUVER" — the recorded street, not a keyword), doc_number, or q (any text). '
       + 'Or by grantor / grantee / either party and/or document type within a recorded-date range — several names in one field are OR\'d, grantor + grantee AND\'d. With a direct lookup, names and doc_type filter its results.',
     inputSchema: {
       grantor: names.optional().describe('Seller / mortgagor / land-contract vendor name(s), "LAST FIRST" for people'),

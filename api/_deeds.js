@@ -140,6 +140,39 @@ function toCityParcel(taxId) {
   if (!rest) return null;
   return /[.-]/.test(rest) ? `${ward}${rest}` : `${ward}${rest}.`;
 }
+
+// The county's quick search is a keyword match anywhere (OCR, book/page, other streets). Parcel / address /
+// doc_number lookups then keep only records that actually carry that value — otherwise "1 WOODWARD" is 4815
+// Woodward, "100 MAIN" is Maine Street, and "661 VANCOUVER" is Liber page 661.
+const STREET_NOISE = /\b(N|S|E|W|NE|NW|SE|SW|NORTH|SOUTH|EAST|WEST|ST|STREET|AVE|AVENUE|BLVD|BOULEVARD|DR|DRIVE|RD|ROAD|LN|LANE|CT|COURT|PL|PLACE|CIR|CIRCLE|WAY|TER|TERRACE|HWY|HIGHWAY|PKWY|PARKWAY)\b/g;
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function addressHits(d, raw) {
+  const q = String(raw).toUpperCase().replace(/[.,'"()]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!q) return false;
+  const addr = (d.address || '').toUpperCase().replace(/[.,'"()]/g, ' ').replace(/\s+/g, ' ').trim();
+  const legal = d.legal || '';
+  const qm = q.match(/^(\d+[A-Z]?)(?:\s+(.*))?$/);
+  if (!qm) return addr.includes(q) || legal.toUpperCase().includes(q);
+  const num = qm[1];
+  const words = (qm[2] || '').replace(STREET_NOISE, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const addrNum = (addr.match(/^(\d+[A-Z]?)\b/) || [])[1];
+  const numberOk = addrNum === num
+    || new RegExp(`Street#?:\\s*${escapeRe(num)}\\b`, 'i').test(legal)
+    || new RegExp(`Street:\\s*${escapeRe(num)}\\b`, 'i').test(legal);
+  if (!numberOk) return false;
+  if (!words.length) return true;
+  const hay = `${addr} ${legal.toUpperCase()}`;
+  return words.every((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(hay));
+}
+function constrainLookup(docs, p) {
+  const parcels = new Set(list(p.parcel).map(toTaxId));
+  if (parcels.size) docs = docs.filter((d) => d.parcels.some((x) => parcels.has(x.tax_id)));
+  const addrs = list(p.address);
+  if (addrs.length) docs = docs.filter((d) => addrs.some((a) => addressHits(d, a)));
+  const nums = list(p.doc_number).map((n) => String(n).replace(/\s+/g, ''));
+  if (nums.length) docs = docs.filter((d) => nums.includes(String(d.doc_number || '').replace(/\s+/g, '')));
+  return docs;
+}
 function isoDate(v, name) {
   if (!v) return null;
   const s = String(v).trim();
@@ -265,7 +298,7 @@ async function search(params) {
   const filtered = parcels.size || muni || addr || minC != null || maxC != null;
   if (parcels.size) docs = docs.filter((d) => d.parcels.some((x) => parcels.has(x.tax_id)));
   if (muni) docs = docs.filter((d) => (d.municipality || '').toUpperCase().includes(muni));
-  if (addr) docs = docs.filter((d) => (d.address || '').toUpperCase().includes(addr) || (d.legal || '').toUpperCase().includes(addr));
+  if (addr) docs = docs.filter((d) => addressHits(d, addr));
   if (minC != null) docs = docs.filter((d) => d.consideration != null && d.consideration >= minC);
   if (maxC != null) docs = docs.filter((d) => d.consideration != null && d.consideration <= maxC);
 
@@ -310,6 +343,7 @@ async function quickSearch(p, values, { parties, codes, from, to, cert }) {
   const minC = p.min_consideration != null ? Number(p.min_consideration) : null, maxC = p.max_consideration != null ? Number(p.max_consideration) : null;
   if (minC != null) docs = docs.filter((d) => d.consideration != null && d.consideration >= minC);
   if (maxC != null) docs = docs.filter((d) => d.consideration != null && d.consideration <= maxC);
+  docs = constrainLookup(docs, p);
   docs.sort((a, b) => sort === 'recorded_asc' ? (a.recorded_date || '').localeCompare(b.recorded_date || '') : sort === 'relevance' ? 0 : (b.recorded_date || '').localeCompare(a.recorded_date || ''));
   const limit = Math.max(1, Math.min(2500, parseInt(p.limit, 10) || docs.length || 1));
   const offset = Math.max(0, parseInt(p.offset, 10) || 0);
@@ -414,4 +448,4 @@ async function parcelHistory(params) {
 /** Close the socket — for scripts, so the process can exit (a warm serverless instance just keeps it). */
 function close() { if (conn) { try { conn.ws.close(); } catch { /* already closed */ } conn = null; } }
 
-module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, GROUPS, ROD };
+module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, addressHits, constrainLookup, GROUPS, ROD };

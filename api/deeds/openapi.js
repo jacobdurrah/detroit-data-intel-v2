@@ -24,7 +24,7 @@ const spec = {
     '/api/deeds/search': { get: { operationId: 'deedsSearch', summary: 'Search the index',
       description: 'Direct lookups by parcel / address / doc_number / q (names and doc_type then filter), or a search by grantor / grantee / party and/or doc_type within dates (several names in one field OR, grantor + grantee AND).',
       parameters: [
-        { ...names('Tax ID "14/002261" or City parcel id "14002261.".'), name: 'parcel' }, { ...names('Street address, e.g. "4661 VANCOUVER".'), name: 'address' },
+        { ...names('Tax ID "14/002261" or City parcel id "14002261.". Documents that do not carry this Tax ID are dropped.'), name: 'parcel' }, { ...names('Street address as recorded, e.g. "4661 VANCOUVER". Keyword hits for other house numbers or OCR text are dropped.'), name: 'address' },
         { ...names('Document (instrument) number.'), name: 'doc_number' }, { ...names('Any text the Register quick search accepts.'), name: 'q' },
         { ...names('Seller / mortgagor / land-contract vendor. People are "LAST FIRST".'), name: 'grantor' }, { ...names('Buyer / lender / vendee.'), name: 'grantee' },
         { ...names('Either side (not with grantor/grantee).'), name: 'party' },
