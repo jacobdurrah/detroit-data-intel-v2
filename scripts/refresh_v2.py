@@ -343,6 +343,11 @@ def transform_csv(name, source_path, data_dir=DATA_DIR):
             if csv_col in csv_headers:
                 mapped.append((csv_col, pg_col))
 
+        if name == "blight" and "Ticket Issued Date" in csv_headers:
+            pg_columns = [pg_col for _, pg_col in mapped]
+            if "ticket_issued_date" not in pg_columns:
+                mapped.append(("Ticket Issued Date", "ticket_issued_date"))
+
         if not mapped:
             print(f"  [{name}] ❌ No CSV columns matched mapping. CSV headers: {csv_headers[:10]}")
             return None, []
@@ -386,11 +391,14 @@ def load_table_psql(name, csv_path, pg_columns):
 
     # TRUNCATE + COPY — full table replace
     # This is the fastest approach for monthly refreshes where we get complete datasets
-    # Uses SET statement_timeout to avoid Supabase's default 2-min limit
+    # Wrap the destructive replace in a transaction so a failed COPY keeps old data.
+    # Uses SET statement_timeout to avoid Supabase's default 2-min limit.
     sql = f"""
 SET statement_timeout = '600000';
+BEGIN;
 TRUNCATE {name};
 \\copy {name} ({cols_str}) FROM '{csv_path}' WITH (FORMAT csv, HEADER true, NULL '', FORCE_NULL ({force_null}))
+COMMIT;
 """
 
     print(f"  [{name}] Loading via TRUNCATE + COPY...", flush=True)
