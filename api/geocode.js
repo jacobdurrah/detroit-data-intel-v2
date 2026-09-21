@@ -1,19 +1,21 @@
 const { handleCors, checkAuth, sendJson, sendError } = require('./_helpers');
 const { supabase } = require('./_supabase');
+const { addressSearchPattern } = require('./_address-search-pattern');
 
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
   if (checkAuth(req, res)) return;
 
   try {
-    const query = (req.query.q || req.query.query || '').trim();
-    if (!query) return sendError(res, 'Query parameter is required', 400);
+    const pattern = addressSearchPattern(req.query.q || req.query.query || '');
+    if (!pattern) return sendError(res, 'Query parameter is required', 400);
 
     const { data, error } = await supabase.from('sales')
       .select('address, latitude, longitude, neighborhood')
-      .ilike('address', `%${query}%`)
+      .ilike('address', pattern)
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
+      .order('address')
       .limit(5);
 
     if (error) {
