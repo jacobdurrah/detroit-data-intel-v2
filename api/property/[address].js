@@ -1,9 +1,23 @@
 const { handleCors, checkAuth, sendJson, sendError } = require('../_helpers');
 const { supabase } = require('../_supabase');
+const { normalizeAddress, parseStreetAddress } = require('../_address');
 
-function normalizeAddress(addr) {
-  if (!addr) return '';
-  return addr.toUpperCase().replace(/[.,#]/g, '').replace(/\s+/g, ' ').trim();
+function emptyResult() {
+  return Promise.resolve({ data: [], error: null });
+}
+
+function queryBlightByAddress(normalized) {
+  // blight stores street_number + street_name separately (no full address column).
+  // Matching the full address against either column never hits (e.g. street_name
+  // "PENNSYLVANIA" will not ILIKE "%2404 PENNSYLVANIA%").
+  const parsed = parseStreetAddress(normalized);
+  if (!parsed) return emptyResult();
+
+  return supabase.from('blight').select('*')
+    .eq('street_number', parsed.streetNumber)
+    .ilike('street_name', parsed.streetName + '%')
+    .order('ticket_issued_date', { ascending: false })
+    .limit(50);
 }
 
 module.exports = async (req, res) => {
@@ -24,7 +38,7 @@ module.exports = async (req, res) => {
       rentalsRes, presaleRes, demosRes, vacantRes, dlbaOwnedRes, dlbaAuctionRes
     ] = await Promise.all([
       supabase.from('sales').select('*').ilike('address', pattern).order('sale_date', { ascending: false }).limit(50),
-      supabase.from('blight').select('*').or(`street_name.ilike.${pattern},street_number.ilike.${pattern}`).order('ticket_issued_date', { ascending: false }).limit(50),
+      queryBlightByAddress(normalized),
       supabase.from('permits').select('*').ilike('address', pattern).order('permit_issued', { ascending: false }).limit(50),
       supabase.from('trades').select('*').ilike('address', pattern).order('permit_issued', { ascending: false }).limit(50),
       supabase.from('assessment').select('*').ilike('address', pattern).limit(5),
