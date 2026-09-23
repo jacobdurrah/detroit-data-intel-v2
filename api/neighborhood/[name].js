@@ -56,7 +56,14 @@ module.exports = async (req, res) => {
       });
     }
 
-    const [salesRes, blightRes, permitsRes, tradesRes, assessRes, rentalsRes, demosRes, dlbaRes] = await Promise.all([
+    // Limited rows are for recent samples / derived lists only.
+    // Exact counts must come from head:true count queries — never sample.length.
+    // (A Bagley-sized neighborhood has ~2k sales; .limit(100) would hard-cap totals at 100.)
+    const [
+      salesRes, blightRes, permitsRes, tradesRes, assessRes, rentalsRes, demosRes, dlbaRes,
+      salesCountRes, blightCountRes, permitsCountRes, tradesCountRes,
+      assessCountRes, rentalsCountRes, demosCountRes, dlbaCountRes,
+    ] = await Promise.all([
       supabase.from('sales').select('*').ilike('neighborhood', pattern).order('sale_date', { ascending: false }).limit(100),
       supabase.from('blight').select('ticket_id, violation_description, fine_amount, balance_due, payment_status, ticket_issued_date').ilike('neighborhood', pattern).order('ticket_issued_date', { ascending: false }).limit(100),
       supabase.from('permits').select('permit_no, address, permit_type, description, permit_issued, estimated_cost, contractor_name').ilike('neighborhood', pattern).order('permit_issued', { ascending: false }).limit(50),
@@ -65,6 +72,14 @@ module.exports = async (req, res) => {
       supabase.from('rentals').select('*').ilike('neighborhood', pattern).limit(50),
       supabase.from('demos').select('*').ilike('neighborhood', pattern).limit(50),
       supabase.from('dlba_owned').select('*').ilike('neighborhood', pattern).limit(100),
+      supabase.from('sales').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
+      supabase.from('blight').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
+      supabase.from('permits').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
+      supabase.from('trades').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
+      supabase.from('assessment').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
+      supabase.from('rentals').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
+      supabase.from('demos').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
+      supabase.from('dlba_owned').select('*', { count: 'exact', head: true }).ilike('neighborhood', pattern),
     ]);
 
     const sales = salesRes.data || [];
@@ -75,6 +90,15 @@ module.exports = async (req, res) => {
     const rentals = rentalsRes.data || [];
     const demos = demosRes.data || [];
     const dlba = dlbaRes.data || [];
+
+    const salesTotal = salesCountRes.count || 0;
+    const blightTotal = blightCountRes.count || 0;
+    const permitsTotal = permitsCountRes.count || 0;
+    const tradesTotal = tradesCountRes.count || 0;
+    const assessTotal = assessCountRes.count || 0;
+    const rentalsTotal = rentalsCountRes.count || 0;
+    const demosTotal = demosCountRes.count || 0;
+    const dlbaTotal = dlbaCountRes.count || 0;
 
     // Top investors in this neighborhood
     const buyerCounts = {};
@@ -109,21 +133,22 @@ module.exports = async (req, res) => {
         neighborhood: decoded,
         profile: {
           name: decoded,
-          total_sales: sales.length,
+          total_sales: salesTotal,
           median_price: medianPrice,
-          total_blight: blight.length,
-          total_permits: permits.length + trades.length,
-          total_rentals: rentals.length,
-          total_demolitions: demos.length,
-          total_dlba_owned: dlba.length,
-          total_parcels: assess.length,
+          total_blight: blightTotal,
+          total_permits: permitsTotal + tradesTotal,
+          total_rentals: rentalsTotal,
+          total_demolitions: demosTotal,
+          total_dlba_owned: dlbaTotal,
+          total_parcels: assessTotal,
           median_assessed_value: medianValue,
         },
         top_investors: topInvestors,
         top_contractors: topContractors,
         sales: {
-          total: sales.length,
+          total: salesTotal,
           median_price: medianPrice,
+          // Volume from the recent sample window (same rows used for median/recent).
           total_volume: prices.reduce((a, b) => a + b, 0),
           recent: sales.slice(0, 5).map(s => ({
             id: s.sales_id, addr: s.address, dt: s.sale_date, pr: Number(s.sale_price) || 0,
@@ -131,15 +156,16 @@ module.exports = async (req, res) => {
           })),
         },
         permits: {
-          total: permits.length,
+          total: permitsTotal,
           types: (() => { const t = {}; permits.forEach(p => { if (p.permit_type) t[p.permit_type] = (t[p.permit_type] || 0) + 1; }); return t; })(),
         },
         trades: {
-          total: trades.length,
+          total: tradesTotal,
           top_contractors: topContractors.map(c => ({ name: c.name, count: c.permits })),
         },
         blight: {
-          total: blight.length,
+          total: blightTotal,
+          // Fine sum is from the recent blight sample, not the full ticket set.
           total_fines: blight.reduce((sum, b) => sum + (Number(b.fine_amount) || 0), 0),
           recent: blight.slice(0, 5).map(b => ({
             id: b.ticket_id, addr: '', desc: b.violation_description, fine: Number(b.fine_amount) || 0,
