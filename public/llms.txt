@@ -43,7 +43,9 @@ parcel: how it came in (e.g. Treasurer deed), how and when it went out (deed, la
 
 ### GET /api/deeds/parcel?parcel=14002261.
 Every document on one parcel, oldest first: tax foreclosure (TCOF/TJOF), Treasurer deed (TQCD), resales, land
-contracts (LCM), mortgages, liens.
+contracts (LCM), mortgages, liens. A Detroit unit id with no rows of its own (01004106.001, 1000 Woodward unit 1)
+also returns the parent parcel's documents (01/004106 or 01/004106.000) when the City's address for that unit is
+the same street. meta.note says so. A parent tax id at a different address is not included.
 
 ### GET /api/deeds/doc-types · GET /api/deeds/status
 
