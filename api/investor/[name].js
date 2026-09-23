@@ -1,6 +1,65 @@
 const { handleCors, checkAuth, sendJson, sendError } = require('../_helpers');
 const { supabase } = require('../_supabase');
 
+/**
+ * PostgREST silently caps raw-row scans at max-rows (often 1000), so
+ * `.limit(5000)` stats were computed from the oldest ~1000 sales only.
+ * Use group-by / column aggregates instead of scanning fact rows.
+ */
+const STATS_SELECT = [
+  'spend:sale_price.sum()',
+  'avg_price:sale_price.avg()',
+  'min_price:sale_price.min()',
+  'max_price:sale_price.max()',
+  'first_date:sale_date.min()',
+  'last_date:sale_date.max()',
+].join(', ');
+
+function firstRow(res) {
+  const data = res && res.data;
+  if (Array.isArray(data) && data.length) return data[0];
+  if (data && typeof data === 'object' && !Array.isArray(data)) return data;
+  return {};
+}
+
+function numField(row, keys) {
+  for (const k of keys) {
+    if (row[k] != null && row[k] !== '') {
+      const n = Number(row[k]);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return 0;
+}
+
+function dateField(row, keys) {
+  for (const k of keys) {
+    if (row[k]) return row[k];
+  }
+  return null;
+}
+
+function readAggCount(row) {
+  return numField(row, ['count', 'total', 'cnt']);
+}
+
+function groupCounts(rows, nameKey) {
+  return (rows || [])
+    .map((r) => ({
+      name: r[nameKey] || 'Unknown',
+      count: readAggCount(r),
+    }))
+    .filter((r) => r.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+function firstQueryError(results) {
+  for (const r of results) {
+    if (r && r.error) return r.error;
+  }
+  return null;
+}
+
 module.exports = async (req, res) => {
   if (handleCors(req, res)) return;
   if (checkAuth(req, res)) return;
@@ -15,33 +74,32 @@ module.exports = async (req, res) => {
     const section = req.query.section || 'purchases';
     const offset = (page - 1) * limit;
 
-    // Get true counts + stats via aggregate queries in parallel
     const [
       purchaseCountRes, saleCountRes,
       purchaseStatsRes, saleStatsRes,
       purchaseHoodsRes, saleHoodsRes,
-      pageDataRes, deedTypesRes
+      pageDataRes, deedTypesRes,
     ] = await Promise.all([
-      // Total counts
       supabase.from('sales').select('*', { count: 'exact', head: true }).ilike('grantee', `%${decoded}%`),
       supabase.from('sales').select('*', { count: 'exact', head: true }).ilike('grantor', `%${decoded}%`),
-      // Purchase stats (first/last page for date range + price stats from first 5000)
-      supabase.from('sales').select('sale_price, sale_date, neighborhood')
-        .ilike('grantee', `%${decoded}%`).order('sale_date', { ascending: true }).limit(5000),
-      // Sale stats
-      supabase.from('sales').select('sale_price, sale_date, neighborhood')
-        .ilike('grantor', `%${decoded}%`).order('sale_date', { ascending: true }).limit(5000),
-      // Neighborhood breakdown (purchases)
-      supabase.from('sales').select('neighborhood').ilike('grantee', `%${decoded}%`).not('neighborhood', 'is', null).limit(5000),
-      // Neighborhood breakdown (sales)
-      supabase.from('sales').select('neighborhood').ilike('grantor', `%${decoded}%`).not('neighborhood', 'is', null).limit(5000),
-      // Current page of records
+      supabase.from('sales').select(STATS_SELECT).ilike('grantee', `%${decoded}%`),
+      supabase.from('sales').select(STATS_SELECT).ilike('grantor', `%${decoded}%`),
+      supabase.from('sales').select('neighborhood, count()').ilike('grantee', `%${decoded}%`).not('neighborhood', 'is', null),
+      supabase.from('sales').select('neighborhood, count()').ilike('grantor', `%${decoded}%`).not('neighborhood', 'is', null),
       section === 'sales'
         ? supabase.from('sales').select('*').ilike('grantor', `%${decoded}%`).order('sale_date', { ascending: false }).range(offset, offset + limit - 1)
         : supabase.from('sales').select('*').ilike('grantee', `%${decoded}%`).order('sale_date', { ascending: false }).range(offset, offset + limit - 1),
-      // Deed types
-      supabase.from('sales').select('terms_of_sale').ilike('grantee', `%${decoded}%`).not('terms_of_sale', 'is', null).limit(5000),
+      supabase.from('sales').select('terms_of_sale, count()').ilike('grantee', `%${decoded}%`).not('terms_of_sale', 'is', null),
     ]);
+
+    const queryError = firstQueryError([
+      purchaseCountRes, saleCountRes, purchaseStatsRes, saleStatsRes,
+      purchaseHoodsRes, saleHoodsRes, pageDataRes, deedTypesRes,
+    ]);
+    if (queryError) {
+      console.error('Investor query error:', queryError);
+      return sendError(res, 'Failed to query investor');
+    }
 
     const totalPurchases = purchaseCountRes.count || 0;
     const totalSales = saleCountRes.count || 0;
@@ -50,53 +108,27 @@ module.exports = async (req, res) => {
       return sendError(res, 'Investor not found', 404);
     }
 
-    // Compute stats from full dataset
-    const pData = purchaseStatsRes.data || [];
-    const sData = saleStatsRes.data || [];
-    let totalSpend = 0, totalRevenue = 0;
-    const purchasePrices = [], salePrices = [];
+    const pStats = firstRow(purchaseStatsRes);
+    const sStats = firstRow(saleStatsRes);
+    const totalSpend = Math.round(numField(pStats, ['spend', 'sum', 'sale_price']));
+    const totalRevenue = Math.round(numField(sStats, ['spend', 'sum', 'sale_price']));
+    const avgPurchase = Math.round(numField(pStats, ['avg_price', 'avg']));
+    const avgSale = Math.round(numField(sStats, ['avg_price', 'avg']));
+    const minPurchase = Math.round(numField(pStats, ['min_price', 'min']));
+    const maxPurchase = Math.round(numField(pStats, ['max_price', 'max']));
+    const firstPurchase = dateField(pStats, ['first_date']);
+    const lastPurchase = dateField(pStats, ['last_date']);
 
-    for (const r of pData) {
-      totalSpend += (r.sale_price || 0);
-      purchasePrices.push(r.sale_price || 0);
-    }
-    for (const r of sData) {
-      totalRevenue += (r.sale_price || 0);
-      salePrices.push(r.sale_price || 0);
-    }
+    const purchaseHoods = groupCounts(purchaseHoodsRes.data, 'neighborhood');
+    const saleHoods = groupCounts(saleHoodsRes.data, 'neighborhood');
 
-    // Neighborhood aggregation
-    const countNeighborhoods = (data) => {
-      const map = {};
-      for (const r of data) {
-        const nb = r.neighborhood || 'Unknown';
-        map[nb] = (map[nb] || 0) + 1;
-      }
-      return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
-    };
-
-    const purchaseHoods = countNeighborhoods(purchaseHoodsRes.data || []);
-    const saleHoods = countNeighborhoods(saleHoodsRes.data || []);
-
-    // Deed types
     const deedTypes = {};
-    for (const r of (deedTypesRes.data || [])) {
-      const t = r.terms_of_sale || 'Unknown';
-      deedTypes[t] = (deedTypes[t] || 0) + 1;
+    for (const row of groupCounts(deedTypesRes.data, 'terms_of_sale')) {
+      deedTypes[row.name] = row.count;
     }
 
-    // Flip detection: get purchased addresses and find matches in sales
-    const purchasedAddrs = new Map();
-    for (const r of pData) {
-      if (r.sale_date) {
-        // Keep earliest purchase per address
-        if (!purchasedAddrs.has(r.neighborhood + '|' + r.sale_price)) {
-          // Use neighborhood+price as rough key since we don't have address in stats query
-        }
-      }
-    }
-
-    // For flips, we need addresses — do a targeted query
+    // Flip sample: address match across buy/sell. Still windowed (PostgREST
+    // max-rows) — hero spend/dates/neighborhoods above are exact aggregates.
     let flips = [];
     if (totalPurchases > 0 && totalSales > 0) {
       const [flipBuys, flipSells] = await Promise.all([
@@ -126,7 +158,6 @@ module.exports = async (req, res) => {
       flips.sort((a, b) => (b.profit || 0) - (a.profit || 0));
     }
 
-    // Map page records
     const records = (pageDataRes.data || []).map(s => ({
       id: s.sales_id, addr: s.address, dt: s.sale_date, pr: Number(s.sale_price) || 0,
       gr: s.grantor, ge: s.grantee, nb: s.neighborhood, pid: s.parcel_id,
@@ -144,14 +175,14 @@ module.exports = async (req, res) => {
           name: decoded,
           total_purchases: totalPurchases,
           total_spend: totalSpend,
-          avg_purchase_price: pData.length > 0 ? Math.round(totalSpend / pData.length) : 0,
-          min_purchase: purchasePrices.length > 0 ? Math.min(...purchasePrices) : 0,
-          max_purchase: purchasePrices.length > 0 ? Math.max(...purchasePrices) : 0,
+          avg_purchase_price: avgPurchase,
+          min_purchase: minPurchase,
+          max_purchase: maxPurchase,
           total_sales: totalSales,
           total_revenue: totalRevenue,
-          avg_sale_price: sData.length > 0 ? Math.round(totalRevenue / sData.length) : 0,
-          first_purchase: pData.length > 0 ? pData[0].sale_date : null,
-          last_purchase: pData.length > 0 ? pData[pData.length - 1].sale_date : null,
+          avg_sale_price: avgSale,
+          first_purchase: firstPurchase,
+          last_purchase: lastPurchase,
           neighborhoods_active: purchaseHoods.length,
           total_flips: flips.length,
           investment_tier: totalPurchases >= 50 ? 'institutional' :
