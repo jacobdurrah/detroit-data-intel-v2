@@ -1,5 +1,6 @@
 const { handleCors, checkAuth, sendJson, sendError, intParam } = require('../_helpers');
 const { supabase } = require('../_supabase');
+const { filterByStreetNumberRange } = require('../_streetNumber');
 
 /**
  * GET /api/block/:id — Full block profile
@@ -52,13 +53,33 @@ module.exports = async (req, res) => {
       street.to_addr_left || 0, street.to_addr_right || 0
     );
     
-    const { data: blight } = await supabase.from('blight')
-      .select('ticket_id, street_number, street_name, ticket_issued_date, violation_description, fine_amount, balance_due, disposition, compliance_status')
-      .ilike('street_name', streetName)
-      .gte('street_number', minAddr)
-      .lte('street_number', maxAddr)
-      .order('ticket_issued_date', { ascending: false })
-      .limit(200);
+    // blight.street_number is TEXT — PostgREST gte/lte is lexicographic
+    // ("1000" <= "199"), so never range-filter in SQL. Prefer exact house
+    // numbers from this block's address map; fall back to numeric filter.
+    const blightSelect =
+      'ticket_id, street_number, street_name, ticket_issued_date, violation_description, fine_amount, balance_due, disposition, compliance_status';
+    const houseNums = [...new Set(
+      (addresses || [])
+        .map((a) => String(a.street_number ?? '').trim())
+        .filter(Boolean)
+    )];
+    let blight = [];
+    if (houseNums.length > 0) {
+      const { data: blightExact } = await supabase.from('blight')
+        .select(blightSelect)
+        .ilike('street_name', streetName)
+        .in('street_number', houseNums)
+        .order('ticket_issued_date', { ascending: false })
+        .limit(200);
+      blight = blightExact || [];
+    } else {
+      const { data: blightCandidates } = await supabase.from('blight')
+        .select(blightSelect)
+        .ilike('street_name', streetName)
+        .order('ticket_issued_date', { ascending: false })
+        .limit(1000);
+      blight = filterByStreetNumberRange(blightCandidates, minAddr, maxAddr).slice(0, 200);
+    }
 
     // 5. Get permits for this block
     const { data: permits } = await supabase.from('permits')
