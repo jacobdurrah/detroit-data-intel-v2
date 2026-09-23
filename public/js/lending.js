@@ -8,6 +8,12 @@
   var initialized = false;
   var currentView = 'lenders'; // 'lenders', 'loans', 'detail'
   var loansPage = 1;
+  var lendersPage = 1;
+  var LENDER_PAGE_SIZE = 50;
+  var detailLoansPage = 1;
+  var DETAIL_LOAN_PAGE_SIZE = 50;
+  var currentLei = null;
+  var currentLoanFilter = '';
   var searchTimer = null;
 
   function init() {
@@ -21,10 +27,10 @@
     // Lender view filters
     ['lending-sub60k', 'lending-investment', 'lending-multifamily', 'lending-llc-sub60k'].forEach(function(id) {
       var el = document.getElementById(id);
-      if (el) el.addEventListener('change', function() { loadLending(); });
+      if (el) el.addEventListener('change', function() { lendersPage = 1; loadLending(); });
     });
     var sortEl = document.getElementById('lending-sort');
-    if (sortEl) sortEl.addEventListener('change', function() { loadLending(); });
+    if (sortEl) sortEl.addEventListener('change', function() { lendersPage = 1; loadLending(); });
 
     // Loan view filters
     ['loan-filter-llc', 'loan-filter-sub60k', 'loan-filter-investment'].forEach(function(id) {
@@ -56,6 +62,7 @@
     if (pagEl) pagEl.innerHTML = '';
 
     if (view === 'lenders') {
+      lendersPage = 1;
       loadLending();
     } else {
       loansPage = 1;
@@ -71,9 +78,18 @@
       investment: (document.getElementById('lending-investment') || {}).checked ? 'true' : '',
       multifamily: (document.getElementById('lending-multifamily') || {}).checked ? 'true' : '',
       llc_sub60k: (document.getElementById('lending-llc-sub60k') || {}).checked ? 'true' : '',
-      sort: (document.getElementById('lending-sort') || {}).value || 'loans',
-      limit: 100
+      sort: (document.getElementById('lending-sort') || {}).value || 'total_loans',
+      page: lendersPage,
+      limit: LENDER_PAGE_SIZE
     };
+  }
+
+  function listTotal(payload, pageItems) {
+    var meta = (payload && payload.meta) || {};
+    if (meta.total != null) return meta.total;
+    if (payload && payload.total != null) return payload.total;
+    if (payload && payload.count != null) return payload.count;
+    return (pageItems && pageItems.length) || 0;
   }
 
   async function loadLending() {
@@ -87,11 +103,28 @@
       var filters = getFilters();
       var data = await App.api('lending', filters);
       var lenders = data.data || data || [];
+      var meta = data.meta || {};
+      var total = listTotal(data, lenders);
+      var totalPages = Math.max(1, Math.ceil(total / LENDER_PAGE_SIZE));
+
       if (!lenders.length) {
         App.showEmpty(listEl, 'No lenders match your filters.');
         return;
       }
       renderLenderCards(listEl, lenders);
+
+      if (pagEl) {
+        App.renderPagination(pagEl, meta.page || lendersPage, totalPages, function(page) {
+          lendersPage = page;
+          loadLending();
+        });
+        var start = (lendersPage - 1) * LENDER_PAGE_SIZE + 1;
+        var end = Math.min(lendersPage * LENDER_PAGE_SIZE, total);
+        var infoEl = document.createElement('span');
+        infoEl.className = 'page-info';
+        infoEl.textContent = 'Showing ' + start + '\u2013' + end + ' of ' + App.formatNumber(total);
+        pagEl.insertBefore(infoEl, pagEl.firstChild);
+      }
     } catch (e) {
       App.showError(listEl, 'Failed to load lending data: ' + e.message, loadLending);
     }
@@ -277,8 +310,11 @@
 
   // ==================== DETAIL VIEW ====================
 
-  async function showDetail(lei) {
+  async function showDetail(lei, page) {
     currentView = 'detail';
+    currentLei = lei;
+    currentLoanFilter = '';
+    detailLoansPage = typeof page === 'number' ? page : 1;
     var listEl = document.getElementById('lending-list');
     App.showLoading(listEl);
     
@@ -290,12 +326,27 @@
     if (pagEl) pagEl.innerHTML = '';
 
     try {
-      var data = await App.api('lender/' + encodeURIComponent(lei));
+      var data = await App.api('lender/' + encodeURIComponent(lei), {
+        page: detailLoansPage,
+        limit: DETAIL_LOAN_PAGE_SIZE
+      });
       if (!data.data) throw new Error('No data returned');
       renderDetail(listEl, data.data, data.meta);
+      renderDetailPager(lei, data.meta || {});
     } catch(e) {
       App.showError(listEl, 'Failed to load lender detail: ' + e.message, function() { showDetail(lei); });
     }
+  }
+
+  function renderDetailPager(lei, meta) {
+    var pagEl = document.getElementById('lending-pagination');
+    if (!pagEl) return;
+    pagEl.innerHTML = '';
+    var total = listTotal({ meta: meta }, []);
+    var pages = meta.pages || Math.max(1, Math.ceil(total / DETAIL_LOAN_PAGE_SIZE));
+    App.renderPagination(pagEl, meta.page || detailLoansPage, pages, function(p) {
+      filterLoans(lei, currentLoanFilter, p);
+    });
   }
 
   function renderDetail(container, detail, meta) {
@@ -409,23 +460,28 @@
     return html;
   }
 
-  async function filterLoans(lei, filter) {
+  async function filterLoans(lei, filter, page) {
     var container = document.getElementById('loan-table-container');
     if (!container) return;
+    currentLei = lei;
+    currentLoanFilter = filter || '';
+    detailLoansPage = typeof page === 'number' ? page : 1;
     container.innerHTML = '<p class="loading">Loading...</p>';
 
-    document.querySelectorAll('.loan-filters .pill').forEach(function(p) { p.classList.remove('active'); });
-    if (event && event.target) event.target.classList.add('active');
+    if (typeof page !== 'number') {
+      document.querySelectorAll('.loan-filters .pill').forEach(function(p) { p.classList.remove('active'); });
+      if (event && event.target) event.target.classList.add('active');
+    }
 
     try {
-      var params = {};
+      var params = { page: detailLoansPage, limit: DETAIL_LOAN_PAGE_SIZE };
       if (filter === 'sub60k') params.sub60k = 'true';
       if (filter === 'business') params.business = 'true';
       if (filter === 'both') { params.sub60k = 'true'; params.business = 'true'; }
-      params.limit = 100;
 
       var data = await App.api('lender/' + encodeURIComponent(lei), params);
-      container.innerHTML = renderDetailLoanTable(data.data.loans || []);
+      container.innerHTML = renderDetailLoanTable((data.data && data.data.loans) || []);
+      renderDetailPager(lei, data.meta || {});
     } catch(e) {
       container.innerHTML = '<p class="error">Failed to filter: ' + e.message + '</p>';
     }

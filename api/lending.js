@@ -40,8 +40,9 @@ module.exports = (req, res) => {
       filtered = filtered.filter(l => l.does_multifamily === true);
     }
 
-    // Filter by LLC/business sub-60K
-    if (req.query.llc_sub60k === 'true') {
+    // Filter by LLC/business sub-60K — this filter also ranks by llc_sub_60k_loans
+    const llcSub60k = req.query.llc_sub60k === 'true';
+    if (llcSub60k) {
       filtered = filtered.filter(l => (l.llc_sub_60k_loans || 0) > 0);
       filtered.sort((a, b) => (b.llc_sub_60k_loans || 0) - (a.llc_sub_60k_loans || 0));
     }
@@ -56,17 +57,25 @@ module.exports = (req, res) => {
       filtered = filtered.filter(l => l.loan_types && l.loan_types[loan_type] > 0);
     }
 
-    // Sort
-    if (sort) {
+    // Sort. The Lenders dropdown sends total_loans / total_volume / avg_rate / name;
+    // keep short aliases (loans / volume / rate) for older callers. Skip when the
+    // llc_sub60k filter already applied its own ranking.
+    if (sort && !llcSub60k) {
       switch (sort) {
         case 'loans':
+        case 'total_loans':
           filtered = filtered.slice().sort((a, b) => (b.total_loans || 0) - (a.total_loans || 0));
           break;
         case 'volume':
+        case 'total_volume':
           filtered = filtered.slice().sort((a, b) => (b.total_volume || 0) - (a.total_volume || 0));
           break;
         case 'rate':
+        case 'avg_rate':
           filtered = filtered.slice().sort((a, b) => (a.avg_rate || 999) - (b.avg_rate || 999));
+          break;
+        case 'name':
+          filtered = filtered.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           break;
       }
     }
