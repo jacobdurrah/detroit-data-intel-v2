@@ -27,16 +27,14 @@
     
     try {
       // Try to load the daily report first
-      var res = await fetch('/api/property-reports?date=' + date);
-      var json = await res.json();
+      var json = await App.api('property-reports', { date: date });
       
       if (json.data && json.data.report_data) {
         currentReport = json.data.report_data;
         currentProperties = currentReport.properties || [];
         
         // Get feedback for these properties
-        var searchRes = await fetch('/api/property-searches?date=' + date + '&limit=100');
-        var searchJson = await searchRes.json();
+        var searchJson = await App.api('property-searches', { date: date, limit: 100 });
         var feedbackMap = {};
         (searchJson.data || []).forEach(function(s) {
           feedbackMap[s.address] = { id: s.id, feedback: s.feedback || [] };
@@ -53,8 +51,7 @@
         renderReport(listEl, statsEl);
       } else {
         // Fallback: load from property_searches (old format)
-        var fallbackRes = await fetch('/api/property-searches?date=' + date + '&limit=50');
-        var fallbackJson = await fallbackRes.json();
+        var fallbackJson = await App.api('property-searches', { date: date, limit: 50 });
         if (fallbackJson.data && fallbackJson.data.length > 0) {
           currentReport = null;
           currentProperties = fallbackJson.data;
@@ -393,17 +390,15 @@
       btn.textContent = 'Saving...';
 
       try {
-        var res = await fetch('/api/search-feedback', {
+        var json = await App.api('search-feedback', {}, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             search_id: searchId,
             user_name: user,
             feedback: type,
             reason: reason || null
-          })
+          }
         });
-        var json = await res.json();
         if (json.error) throw new Error(json.error);
         modal.remove();
         loadReport(); // Refresh
@@ -426,10 +421,9 @@
     btn.textContent = '📌 Saving...';
 
     try {
-      var res = await fetch('/api/saved-properties', {
+      var json = await App.api('saved-properties', {}, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           search_id: searchId || null,
           address: address,
           neighborhood: neighborhood || null,
@@ -437,9 +431,8 @@
           list_price: price ? Number(price) : null,
           estimated_arv: arv ? Number(arv) : null,
           status: 'researching'
-        })
+        }
       });
-      var json = await res.json();
       if (json.error) throw new Error(json.error);
       btn.textContent = '✅ Saved';
     } catch (err) {

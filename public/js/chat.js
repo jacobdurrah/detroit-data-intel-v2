@@ -126,17 +126,10 @@
     isLoading = true;
 
     try {
-      var res = await fetch('/api/chat', {
+      var data = await App.api('chat', {}, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text })
+        body: { question: text }
       });
-
-      if (!res.ok) {
-        throw new Error('Chat error ' + res.status);
-      }
-
-      var data = await res.json();
 
       // Remove typing indicator
       removeTyping(typingEl);

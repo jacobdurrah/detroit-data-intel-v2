@@ -39,16 +39,23 @@
   };
 
   /* --- API Helper --- */
-  async function api(endpoint, params) {
+  async function api(endpoint, params, options) {
     var url = '/api/' + endpoint;
     params = params || {};
+    options = options || {};
     params.key = API_KEY;
     var qs = Object.entries(params)
       .filter(function (e) { return e[1] !== undefined && e[1] !== null && e[1] !== ''; })
       .map(function (e) { return encodeURIComponent(e[0]) + '=' + encodeURIComponent(e[1]); })
       .join('&');
     if (qs) url += '?' + qs;
-    var res = await fetch(url);
+    var fetchOpts = {};
+    if (options.method) fetchOpts.method = options.method;
+    if (options.body !== undefined) {
+      fetchOpts.headers = { 'Content-Type': 'application/json' };
+      fetchOpts.body = JSON.stringify(options.body);
+    }
+    var res = await fetch(url, fetchOpts);
     if (res.status === 401) {
       localStorage.removeItem('ddi_key'); API_KEY = ''; checkLogin(); throw new Error('Unauthorized');
     }
