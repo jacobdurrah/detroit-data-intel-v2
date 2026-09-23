@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
     }
     if (activeLayers.includes('blight')) {
       results.blight = (await queryTable('blight', 'ticket_id, street_number, street_name, violation_description, fine_amount, balance_due, ticket_issued_date, neighborhood, latitude, longitude', 'latitude', 'longitude', 'ticket_issued_date'))
-        .map(b => ({ id: b.ticket_id, addr: `${b.street_number || ''} ${b.street_name || ''}`.trim(), desc: b.violation_description, fine: b.fine_amount, balance: b.balance_due, nb: b.neighborhood, lat: b.latitude, lng: b.longitude, type: 'blight' }));
+        .map(b => ({ id: b.ticket_id, addr: `${b.street_number || ''} ${b.street_name || ''}`.trim(), desc: b.violation_description, fine: b.fine_amount, balance: b.balance_due, dt: b.ticket_issued_date, nb: b.neighborhood, lat: b.latitude, lng: b.longitude, type: 'blight' }));
     }
     if (activeLayers.includes('demos')) {
       results.demos = (await queryTable('demos', 'permit_no, address, permit_issued, permit_status, bld_type_use, contractor_name, neighborhood, council_district, latitude, longitude', 'latitude', 'longitude', 'permit_issued'))

@@ -10,7 +10,8 @@
     "dev": "vercel dev",
     "build": "vercel build",
     "test": "npx playwright test",
-    "test:ui": "npx playwright test --ui"
+    "test:ui": "npx playwright test --ui",
+    "test:map-popup": "node --test tests/map-popup.node.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

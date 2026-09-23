@@ -508,19 +508,19 @@
       ];
     } else if (layer === 'blight') {
       fields = [
-        {k: 'ordinance_description', l: 'Violation'},
-        {k: 'ticket_issued_date', l: 'Issued', fmt: 'date'},
-        {k: 'disposition', l: 'Disposition'},
-        {k: 'amt_fine', l: 'Fine', fmt: 'currency'},
-        {k: 'amt_judgment', l: 'Judgment', fmt: 'currency'},
-        {k: 'amt_balance_due', l: 'Balance Due', fmt: 'currency'},
-        {k: 'payment_status', l: 'Payment Status'},
-        {k: 'property_owner_name', l: 'Owner'},
-        {k: 'property_owner_address', l: 'Owner Address'},
-        {k: 'hearing_date', l: 'Hearing', fmt: 'date'},
-        {k: 'judgment_date', l: 'Judgment Date', fmt: 'date'},
-        {k: 'agency_name', l: 'Agency'},
-        {k: 'neighborhood', l: 'Neighborhood'},
+        {k: ['desc','ordinance_description','violation_description'], l: 'Violation'},
+        {k: ['dt','ticket_issued_date'], l: 'Issued', fmt: 'date'},
+        {k: ['disposition'], l: 'Disposition'},
+        {k: ['fine','amt_fine','fine_amount'], l: 'Fine', fmt: 'currency'},
+        {k: ['judgment','amt_judgment','judgment_amount'], l: 'Judgment', fmt: 'currency'},
+        {k: ['balance','amt_balance_due','balance_due'], l: 'Balance Due', fmt: 'currency'},
+        {k: ['payment_status'], l: 'Payment Status'},
+        {k: ['owner','property_owner_name'], l: 'Owner'},
+        {k: ['property_owner_address'], l: 'Owner Address'},
+        {k: ['hearing_date'], l: 'Hearing', fmt: 'date'},
+        {k: ['judgment_date'], l: 'Judgment Date', fmt: 'date'},
+        {k: ['agency_name'], l: 'Agency'},
+        {k: ['nb','neighborhood'], l: 'Neighborhood'},
       ];
     } else if (layer === 'demos') {
       fields = [
@@ -542,9 +542,9 @@
       ];
     } else if (layer === 'dlba') {
       fields = [
-        {k: 'inventory_status_socrata', l: 'Status'},
-        {k: 'neighborhood', l: 'Neighborhood'},
-        {k: 'parcel_id', l: 'Parcel ID'},
+        {k: ['class','inventory_status_socrata','property_class'], l: 'Status'},
+        {k: ['nb','neighborhood'], l: 'Neighborhood'},
+        {k: ['id','pid','parcel_id'], l: 'Parcel ID'},
       ];
     } else if (layer === 'density') {
       fields = [
