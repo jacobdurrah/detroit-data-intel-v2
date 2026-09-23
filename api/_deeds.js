@@ -140,6 +140,48 @@ function toCityParcel(taxId) {
   if (!rest) return null;
   return /[.-]/.test(rest) ? `${ward}${rest}` : `${ward}${rest}.`;
 }
+
+/**
+ * Detroit condo ids are ward + 6 digits + a unit suffix ("01/004106.001" ↔ city "01004106.001").
+ * The Register often files the building under the unsuffixed id or ".000" instead, and never under ".001".
+ * ".000" itself is already that parent form. A non-unit id (no dot suffix) is not a unit.
+ */
+function detroitUnitTaxId(taxId) {
+  const m = String(taxId).toUpperCase().match(/^(\d{2}\/\d{6})\.(\d+)$/);
+  if (!m || /^0+$/.test(m[2])) return null;
+  return { exact: `${m[1]}.${m[2]}`, base: m[1], zero: `${m[1]}.000` };
+}
+
+const RECORDED_STREET_SUFFIX = /\b(AVE|AVENUE|ST|STREET|BLVD|BOULEVARD|RD|ROAD|DR|DRIVE|PL|PLACE|LN|LANE|CT|COURT|CIR|CIRCLE|WAY|TER|TERRACE|HWY|HIGHWAY|PKWY|PARKWAY)\b/g;
+/** House number + street name, without unit or street-type suffix. "1000 WOODWARD AVE UNIT 1" and "1000 WOODWARD" match; "112 EDMUND" does not. */
+function recordedStreetKey(address) {
+  if (!address) return null;
+  let a = String(address).toUpperCase().replace(/#/g, ' ');
+  a = a.replace(/\b(UNIT|APT|APARTMENT|STE|SUITE)\b.*$/g, ' ');
+  a = a.replace(RECORDED_STREET_SUFFIX, ' ');
+  a = a.replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  return a || null;
+}
+function sameRecordedStreet(cityAddress, deedAddress) {
+  const a = recordedStreetKey(cityAddress);
+  const b = recordedStreetKey(deedAddress);
+  return Boolean(a && b && a === b);
+}
+
+/** Parent-parcel rows whose tax id is the building id and whose legal address is that same street. */
+function selectParentParcelDocs(cityAddress, docs, taxIds) {
+  const allow = new Set(taxIds);
+  const seen = new Set();
+  const out = [];
+  for (const d of docs || []) {
+    if (!d || seen.has(d.doc_id)) continue;
+    const taxOk = (d.parcels || []).some((p) => allow.has(p.tax_id));
+    if (!taxOk || !sameRecordedStreet(cityAddress, d.address)) continue;
+    seen.add(d.doc_id);
+    out.push(d);
+  }
+  return out;
+}
 function isoDate(v, name) {
   if (!v) return null;
   const s = String(v).trim();
@@ -237,7 +279,11 @@ async function search(params) {
   const cert = await certDate();
   const from = isoDate(p.from, 'from') || '18000101';
   const to = isoDate(p.to, 'to') || (cert.certified_through || '').replace(/-/g, '') || '29991231';
-  if (quickValues.length) return quickSearch(p, quickValues, { parties, codes, from, to, cert });
+  if (quickValues.length) {
+    const result = await quickSearch(p, quickValues, { parties, codes, from, to, cert });
+    if (p._parcelFallbackDone) return result;
+    return attachParentParcelDocs(p, result);
+  }
   if (!Object.keys(parties).length) {
     const days = (Date.parse(`${to.slice(0, 4)}-${to.slice(4, 6)}-${to.slice(6)}`) - Date.parse(`${from.slice(0, 4)}-${from.slice(4, 6)}-${from.slice(6)}`)) / 86_400_000;
     if (days > 366) throw badRequest('a doc_type search without names needs a from/to range of a year or less');
@@ -321,6 +367,64 @@ async function quickSearch(p, values, { parties, codes, from, to, cert }) {
       query: { values, parties, doc_type_codes: codes, from, to, sort },
     },
     data: docs.slice(offset, offset + limit),
+  };
+}
+
+/** City assessor address for a Register tax id, or null if the parcel layer has none. */
+async function cityAddressForTaxId(taxId) {
+  const city = toCityParcel(taxId);
+  if (!city) return null;
+  try {
+    const rows = await arcgis('parcel_file_current', `parcel_id = '${city.replace(/'/g, "''")}'`, 'parcel_id,address');
+    const row = rows.find((r) => String(r.parcel_id || '').toUpperCase() === city) || rows[0];
+    return row?.address ? String(row.address) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A unit Tax ID with no indexed rows of its own ("01004106.001" → 01/004106.001, 1000 Woodward)
+ * still has the building's documents on 01/004106 and 01/004106.000. Use those only when the
+ * City's address for the unit is the same street as the document — the bare stem is often a
+ * different lot (01/000701 is 112 Edmund, not 2845 John R unit 1).
+ */
+async function attachParentParcelDocs(p, result) {
+  if (list(p.address).length || list(p.q).length || list(p.doc_number).length) return result;
+  const ids = list(p.parcel).map(toTaxId);
+  if (ids.length !== 1) return result;
+  const unit = detroitUnitTaxId(ids[0]);
+  if (!unit) return result;
+  if ((result.data || []).some((d) => (d.parcels || []).some((x) => x.tax_id === unit.exact))) return result;
+  const cityAddress = await cityAddressForTaxId(unit.exact);
+  if (!cityAddress) return result;
+  let alt;
+  try {
+    alt = await search({
+      parcel: [unit.base, unit.zero],
+      from: p.from, to: p.to, doc_type: p.doc_type, exact: p.exact, sort: p.sort,
+      grantor: p.grantor, grantee: p.grantee, party: p.party,
+      _parcelFallbackDone: true,
+    });
+  } catch {
+    return result;
+  }
+  const picked = selectParentParcelDocs(cityAddress, alt.data, [unit.base, unit.zero]);
+  if (!picked.length) return result;
+  const sort = String(p.sort || 'recorded_desc');
+  picked.sort((a, b) => sort === 'recorded_asc' ? (a.recorded_date || '').localeCompare(b.recorded_date || '') : sort === 'relevance' ? 0 : (b.recorded_date || '').localeCompare(a.recorded_date || ''));
+  const limit = Math.max(1, Math.min(2500, parseInt(p.limit, 10) || picked.length || 1));
+  const offset = Math.max(0, parseInt(p.offset, 10) || 0);
+  const data = picked.slice(offset, offset + limit);
+  const note = `No documents are indexed under Tax ID ${unit.exact} (${cityAddress}). Showing ${picked.length} document(s) recorded on the parent parcel (${unit.base} or ${unit.zero}) at the same address. Confirm the tax id before attributing them to one condo unit.`;
+  return {
+    ...result,
+    meta: {
+      ...result.meta,
+      total: picked.length, matched: picked.length, returned: data.length, fetched: picked.length,
+      truncated: Boolean(alt.meta?.truncated), note,
+    },
+    data,
   };
 }
 
@@ -414,4 +518,4 @@ async function parcelHistory(params) {
 /** Close the socket — for scripts, so the process can exit (a warm serverless instance just keeps it). */
 function close() { if (conn) { try { conn.ws.close(); } catch { /* already closed */ } conn = null; } }
 
-module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, GROUPS, ROD };
+module.exports = { search, entity, parcelHistory, docTypes, certDate, close, toTaxId, toCityParcel, nameTerm, detroitUnitTaxId, sameRecordedStreet, selectParentParcelDocs, GROUPS, ROD };
